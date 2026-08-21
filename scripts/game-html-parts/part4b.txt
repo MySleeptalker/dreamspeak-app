@@ -1,4 +1,7 @@
-
+nai piasméni aftí i thési?)"]],
+    sentences:[["Breach of contract","Παραβίαση σύμβασης (Paraviási sýmvasis)"],["Informed consent","Ενημερωμένη συγκατάθεση (Enimeroméni synkatáthesi)"],["Merger and acquisition","Συγχώνευση και εξαγορά (Synchóneusi kai exagorá)"],["Statute of limitations","Παραγραφή (Paragrafí)"],["Diagnosis and prognosis","Διάγνωση και πρόγνωση (Diágnosi kai prógnosi)"],["Intellectual property rights","Δικαιώματα πνευματικής ιδιοκτησίας (Dikaiómata pnevmatikís idioktisías)"],["Liability clause","Ρήτρα ευθύνης (Rítra efthínis)"],["Quarterly earnings report","Τριμηνιαία έκθεση κερδών (Triminiaía ékthesi kerdón)"],["Cease and desist","Εντολή παύσης (Entolí pávsis)"],["Chronic condition","Χρόνια πάθηση (Chrónia páthisi)"]]
+  }
+};
 
 const TIER_META = {
   beginner:{ icon:'🌱', label:'Beginner', color:'from-green-400 to-emerald-500', blurb:"Fresh grass, fresh start! We'll build you up from the alphabet, one sound at a time." },
