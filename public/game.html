@@ -239,7 +239,7 @@
 <body>
 
 <!-- ============ SCREEN: AUTH (Login / Sign Up) ============ -->
-<div id="view-auth" class="view view-flex min-h-screen px-4 py-10 items-center justify-center">
+<div id="view-auth" class="view view-flex active min-h-screen px-4 py-10 items-center justify-center">
   <div class="max-w-md w-full text-center">
     <div class="sheep-badge mx-auto mb-4" style="width:130px;height:130px;">
       <img src="https://galaxy-prod.tlcdn.com/gen/user_35J6p9VaA7ta4tCbPmZA8UqaTjm/0fed94fd-73a9-45b1-a390-caca760f2954.png" alt="Dreamspeak sheep mascot">
@@ -661,7 +661,8 @@ const DEFAULT_STATE = {
   wagerActive: false,
   leaderboard: null,
   unlockedAchievements: [],
-  loggedIn: false
+  loggedIn: false,
+  isAdmin: false
 };
 
 let state = JSON.parse(JSON.stringify(DEFAULT_STATE));
@@ -840,6 +841,7 @@ function applyServerUser(u){
   state.inventory = u.inventory || { freeze:0, hearts:0, boost:0 };
   state.unlockedAchievements = u.achievements || [];
   state.loggedIn = true;
+  state.isAdmin = !!u.isAdmin;
   saveLocalCache();
 }
 
@@ -943,6 +945,10 @@ async function doLogout(){
 }
 
 function afterAuthNavigate(){
+  if(state.isAdmin){
+    window.location.href = '/admin';
+    return;
+  }
   refreshHubStats();
   ensureLeaderboard();
   if(state.language && state.level){
