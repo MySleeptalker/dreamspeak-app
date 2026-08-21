@@ -1,0 +1,501 @@
+free' && state.hearts <= 0){
+    showOutOfHearts();
+    return;
+  }
+  sfxClick();
+  quiz.questions = buildQuizQuestions();
+  quiz.idx = 0;
+  quiz.correctCount = 0;
+  document.getElementById('quizLives').textContent = heartsDisplay();
+  const stageMeta = STAGE_META[state.stage];
+  document.getElementById('quizTierLabel').textContent = `${LANGUAGES[state.language].name} • ${stageMeta.icon} ${stageMeta.label}`;
+  renderQuestion();
+  showView('view-quiz');
+}
+
+function renderQuestion(){
+  quiz.answered = false;
+  stopAllAudio();
+  const q = quiz.questions[quiz.idx];
+  const isAlphabet = state.stage === 'alphabet';
+  const isWords = state.stage === 'words';
+  const questionEl = document.getElementById('quizQuestion');
+  const rtl = !!LANGUAGES[state.language].rtl;
+  questionEl.dir = 'ltr';
+
+  if(isAlphabet){
+    questionEl.textContent = `What sound does "${q.term}" make?`;
+  } else {
+    questionEl.textContent = `How do you say "${q.term}"?`;
+  }
+
+  const imgWrap = document.getElementById('wordImageWrap');
+  const img = document.getElementById('wordImage');
+  if(isWords && WORD_IMAGES[q.term.toLowerCase()]){
+    img.src = WORD_IMAGES[q.term.toLowerCase()];
+    img.alt = q.term;
+    imgWrap.classList.remove('hidden');
+    imgWrap.classList.add('flex');
+  } else {
+    imgWrap.classList.add('hidden');
+    imgWrap.classList.remove('flex');
+  }
+
+  document.getElementById('quizProgress').style.width = (quiz.idx/quiz.questions.length*100)+'%';
+  document.getElementById('quizLives').textContent = heartsDisplay();
+  const container = document.getElementById('quizOptions');
+  container.innerHTML = '';
+  container.dir = rtl ? 'rtl' : 'ltr';
+  q.options.forEach(opt=>{
+    const wrap = document.createElement('div');
+    wrap.className = 'relative';
+    const btn = document.createElement('button');
+    btn.className = 'option-btn btn-push glass rounded-2xl p-4 pr-12 border-3 border-white/20 font-bold text-left w-full';
+    btn.style.borderWidth = '3px';
+    btn.textContent = opt;
+    btn.onclick = ()=>selectAnswer(opt, btn);
+    wrap.appendChild(btn);
+    // Every choice gets its own repeatable listen button — never reveals which one is correct.
+    if(!isAlphabet){
+      const speakIcon = document.createElement('button');
+      speakIcon.type = 'button';
+      speakIcon.className = 'absolute right-2 top-1/2 -translate-y-1/2 text-xl hover:scale-125 transition-transform';
+      speakIcon.textContent = '🔊';
+      speakIcon.title = 'Hear this option';
+      speakIcon.onclick = (e)=>{ e.stopPropagation(); playPronunciation(opt, state.language, null); };
+      wrap.appendChild(speakIcon);
+    }
+    container.appendChild(wrap);
+  });
+  document.getElementById('quizContinueBtn').classList.add('hidden');
+  document.getElementById('speakBtn').classList.add('hidden');
+  const qSpeakBtn = document.getElementById('questionSpeakBtn');
+  const badge = document.getElementById('quizSheepBadge');
+  badge.classList.remove('correct','incorrect');
+  document.getElementById('sheepEmote').classList.remove('show');
+  document.getElementById('sheepReaction').classList.remove('show');
+
+  if(isAlphabet){
+    // Alphabet stage IS a listening exercise — hearing the sound and matching it to the
+    // right description is the whole point, so we auto-play it and let them replay freely.
+    qSpeakBtn.classList.remove('hidden');
+    qSpeakBtn.classList.add('flex');
+    setTimeout(()=>replayCurrentAudio(), 350);
+  } else {
+    qSpeakBtn.classList.add('hidden');
+    qSpeakBtn.classList.remove('flex');
+  }
+}
+
+function replayCurrentAudio(){
+  const q = quiz.questions[quiz.idx];
+  if(!q) return;
+  const idx = state.stage === 'alphabet' ? quiz.idx : null;
+  // Alphabet audio is keyed by position in the language's full alphabet list, not the shuffled quiz order.
+  if(state.stage === 'alphabet'){
+    const fullList = CONTENT[state.language].alphabet;
+    const pos = fullList.findIndex(item => item[0] === q.term);
+    playPronunciation(q.translation, state.language, pos >= 0 ? pos : null);
+  } else {
+    playPronunciation(q.translation, state.language, null);
+  }
+}
+
+function speakCurrentAnswer(){
+  replayCurrentAudio();
+}
+
+function selectAnswer(chosen, btnEl){
+  if(quiz.answered) return;
+  quiz.answered = true;
+  sfxClick();
+  const q = quiz.questions[quiz.idx];
+  const isCorrect = chosen === q.translation;
+  const allBtns = document.querySelectorAll('#quizOptions .option-btn');
+  allBtns.forEach(b=>{ b.disabled = true; });
+
+  if(isCorrect){
+    btnEl.classList.add('correct-flash');
+    quiz.correctCount++;
+    sfxCorrect();
+    animateSheepCorrect();
+    const stageBonus = state.stage === 'sentences' ? 5 : state.stage === 'phrases' ? 3 : state.stage === 'words' ? 1 : 0;
+    const gain = 10 + stageBonus;
+    state.xp += gain;
+    state.gems += 5;
+    saveLocalCache();
+    refreshHubStats();
+    checkAchievements();
+  } else {
+    btnEl.classList.add('incorrect-flash');
+    allBtns.forEach(b=>{ if(b.textContent === q.translation) b.classList.add('correct-flash'); });
+    sfxIncorrect();
+    animateSheepIncorrect();
+    shakeCard();
+    loseHeart();
+    document.getElementById('quizLives').textContent = heartsDisplay();
+  }
+  document.getElementById('quizContinueBtn').classList.remove('hidden');
+  document.getElementById('speakBtn').classList.remove('hidden');
+  setTimeout(()=>replayCurrentAudio(), 350);
+
+  if(state.plan === 'free' && state.hearts <= 0){
+    setTimeout(()=>{ finishQuiz(true); }, 1200);
+  }
+}
+
+function shakeCard(){
+  const card = document.getElementById('quizCard');
+  card.classList.remove('shake');
+  void card.offsetWidth;
+  card.classList.add('shake');
+}
+
+function animateSheepCorrect(){
+  const badge = document.getElementById('quizSheepBadge');
+  badge.classList.remove('incorrect');
+  void badge.offsetWidth;
+  badge.classList.add('correct');
+  const emote = document.getElementById('sheepEmote');
+  emote.textContent = '✨';
+  emote.classList.add('show');
+  const reaction = document.getElementById('sheepReaction');
+  reaction.textContent = ['🤩','😄','🥳'][Math.floor(Math.random()*3)];
+  reaction.classList.remove('show');
+  void reaction.offsetWidth;
+  reaction.classList.add('show');
+  setTimeout(()=>reaction.classList.remove('show'), 1400);
+  spawnBurst(['✨','🌟','💫','⭐'], 8);
+}
+function animateSheepIncorrect(){
+  const badge = document.getElementById('quizSheepBadge');
+  badge.classList.remove('correct');
+  void badge.offsetWidth;
+  badge.classList.add('incorrect');
+  const emote = document.getElementById('sheepEmote');
+  emote.textContent = '💨';
+  emote.classList.add('show');
+  const reaction = document.getElementById('sheepReaction');
+  reaction.textContent = ['😲','😳','😯'][Math.floor(Math.random()*3)];
+  reaction.classList.remove('show');
+  void reaction.offsetWidth;
+  reaction.classList.add('show');
+  setTimeout(()=>reaction.classList.remove('show'), 1400);
+}
+
+function spawnBurst(emojis, count){
+  const burstEl = document.getElementById('sheepBurst');
+  for(let i=0;i<count;i++){
+    const span = document.createElement('span');
+    span.className = 'burst-emoji';
+    span.textContent = emojis[Math.floor(Math.random()*emojis.length)];
+    const angle = Math.random()*Math.PI*2;
+    const dist = 60 + Math.random()*60;
+    span.style.setProperty('--bx', (Math.cos(angle)*dist)+'px');
+    span.style.setProperty('--by', (Math.sin(angle)*dist - 40)+'px');
+    span.style.left = '50%';
+    span.style.top = '50%';
+    burstEl.appendChild(span);
+    setTimeout(()=>span.remove(), 950);
+  }
+}
+
+function nextQuestion(){
+  sfxClick();
+  quiz.idx++;
+  if(quiz.idx >= quiz.questions.length){
+    finishQuiz(false);
+  } else {
+    renderQuestion();
+  }
+}
+
+function exitQuiz(){
+  if(confirm("Leave this lesson? Your progress on this lesson won't be saved.")){
+    goToDashboard();
+  }
+}
+
+function showOutOfHearts(){
+  updateHeartTimer();
+  showView('view-outofhearts');
+}
+function updateHeartTimer(){
+  const el = document.getElementById('heartTimer');
+  if(!state.lastHeartLostAt){ el.textContent = '00:00:00'; return; }
+  const remaining = Math.max(0, HEART_REGEN_MS - (Date.now() - state.lastHeartLostAt));
+  const h = Math.floor(remaining/3600000);
+  const m = Math.floor((remaining%3600000)/60000);
+  const s = Math.floor((remaining%60000)/1000);
+  el.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  if(remaining <= 0){ regenHeartsIfDue(); }
+}
+setInterval(()=>{
+  if(document.getElementById('view-outofhearts').classList.contains('active')) updateHeartTimer();
+}, 1000);
+
+function finishQuiz(outOfHearts){
+  document.getElementById('quizProgress').style.width = '100%';
+  const total = quiz.questions.length;
+  const answeredCount = outOfHearts ? (quiz.idx+1) : total;
+  const accuracy = Math.round((quiz.correctCount/answeredCount)*100) || 0;
+  const stageBonus = state.stage === 'sentences' ? 5 : state.stage === 'phrases' ? 3 : state.stage === 'words' ? 1 : 0;
+  const xpEarned = quiz.correctCount * (10 + stageBonus);
+  const gemsEarned = quiz.correctCount * 5;
+
+  state.lessonsCompleted += 1;
+  if(accuracy === 100 && answeredCount === total) state.perfectLessons += 1;
+  registerDailyPlay();
+
+  if(state.wagerActive){
+    if(accuracy === 100 && answeredCount === total){
+      state.gems += 100;
+      toast('🎉 Double or Nothing WON! +100💎 bonus');
+    } else {
+      toast('😬 Double or Nothing lost — wager gems forfeited.');
+    }
+    state.wagerActive = false;
+  }
+
+  let stageAdvanced = false;
+  let newStageMeta = null;
+  if(!outOfHearts && accuracy >= 60){
+    state.stageProgress += 1;
+    if(state.stageProgress >= MASTERY_LESSONS){
+      const curIdx = STAGE_ORDER.indexOf(state.stage);
+      if(curIdx < STAGE_ORDER.length - 1){
+        state.stage = STAGE_ORDER[curIdx + 1];
+        state.stageProgress = 0;
+        stageAdvanced = true;
+        newStageMeta = STAGE_META[state.stage];
+      } else {
+        state.stageProgress = MASTERY_LESSONS;
+      }
+    }
+  }
+
+  saveLocalCache();
+  refreshHubStats();
+  checkAchievements();
+  pushToBackend();
+
+  document.getElementById('completeXP').textContent = '+'+xpEarned;
+  document.getElementById('completeGems').textContent = '+'+gemsEarned;
+  document.getElementById('completeAcc').textContent = accuracy+'%';
+  document.getElementById('completeStageNote').textContent = stageAdvanced
+    ? `🎓 Great progress! You've advanced to: ${newStageMeta.icon} ${newStageMeta.label}`
+    : '';
+  sfxComplete();
+  spawnConfetti(60);
+  if(stageAdvanced){ setTimeout(sfxStageUp, 500); spawnConfetti(40); }
+  simulateBotBoost();
+
+  if(outOfHearts){
+    showOutOfHearts();
+  } else {
+    showView('view-complete');
+  }
+}
+
+const CONFETTI_COLORS = ['#ff3fa4','#ffcd3c','#7bf542','#37d0ff','#8b2ff0','#ffffff'];
+function spawnConfetti(count){
+  for(let i=0;i<count;i++){
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    piece.style.left = Math.random()*100+'vw';
+    piece.style.background = CONFETTI_COLORS[Math.floor(Math.random()*CONFETTI_COLORS.length)];
+    piece.style.animationDuration = (2 + Math.random()*1.5)+'s';
+    piece.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+    document.body.appendChild(piece);
+    setTimeout(()=>piece.remove(), 3600);
+  }
+}
+
+function openShop(){
+  sfxWhoosh();
+  document.getElementById('shopGems').textContent = state.gems;
+  renderInventory();
+  document.getElementById('shopOverlay').classList.add('open');
+  document.getElementById('shopDrawer').classList.add('open');
+}
+function closeShop(){
+  document.getElementById('shopOverlay').classList.remove('open');
+  document.getElementById('shopDrawer').classList.remove('open');
+}
+function renderInventory(){
+  const inv = state.inventory;
+  document.getElementById('shopInventory').innerHTML = `Owned — 🧊 Streak Freeze: ${inv.freeze} &nbsp;|&nbsp; ⚡ XP Boost: ${inv.boost}`;
+}
+function buyItem(key, cost){
+  sfxClick();
+  if(state.gems < cost){ toast("💎 Not enough gems!"); return; }
+  state.gems -= cost;
+  if(key === 'hearts'){
+    state.hearts = state.heartsMax;
+    state.lastHeartLostAt = null;
+    toast('❤️ Hearts refilled!');
+  } else {
+    state.inventory[key] = (state.inventory[key]||0) + 1;
+    toast(key === 'freeze' ? '🧊 Streak Freeze purchased!' : '⚡ XP Boost purchased!');
+  }
+  saveLocalCache();
+  refreshHubStats();
+  document.getElementById('shopGems').textContent = state.gems;
+  document.getElementById('dashGems').textContent = state.gems;
+  document.getElementById('dashHearts').textContent = heartsDisplay();
+  renderInventory();
+  sfxCoin();
+  pushToBackend();
+  if(document.getElementById('view-outofhearts').classList.contains('active') && state.hearts > 0){
+    goToDashboard();
+  }
+}
+
+function openWager(){
+  document.getElementById('wagerModal').classList.remove('hidden');
+  document.getElementById('wagerModal').classList.add('flex');
+}
+function closeWager(){
+  document.getElementById('wagerModal').classList.add('hidden');
+  document.getElementById('wagerModal').classList.remove('flex');
+}
+function confirmWager(){
+  if(state.gems < 100){ toast('💎 Not enough gems to wager!'); closeWager(); return; }
+  if(state.wagerActive){ toast('You already have an active wager!'); closeWager(); return; }
+  state.gems -= 100;
+  state.wagerActive = true;
+  saveLocalCache();
+  refreshHubStats();
+  document.getElementById('shopGems').textContent = state.gems;
+  document.getElementById('dashGems').textContent = state.gems;
+  toast('🎲 Wager placed! Score 100% on your next lesson.');
+  closeWager();
+  sfxCoin();
+}
+
+const BOT_NAMES = ['Fernanda_Fluent','KenjiSpeaks','ThaiTiger','ParisPaws','Rosalinda99','BleatMaster','WoolfgangXP','LinguaLola','SabaiSam','MoutonMax','SeoulSage','AthensAce'];
+
+function ensureLeaderboard(){
+  if(state.leaderboard) return;
+  const bots = shuffle(BOT_NAMES).slice(0,6).map(name=>({ name, xp: 400 + Math.floor(Math.random()*1400), isBot:true }));
+  state.leaderboard = bots;
+  saveLocalCache();
+}
+function getFullLeaderboard(){
+  const list = state.leaderboard.slice();
+  list.push({ name: state.profile.name || 'You', xp: state.xp, isBot:false });
+  list.sort((a,b)=>b.xp-a.xp);
+  return list;
+}
+function renderMiniLeaderboard(){
+  const list = getFullLeaderboard().slice(0,5);
+  const el = document.getElementById('dashLeaderboardMini');
+  el.innerHTML = '';
+  list.forEach((p, i)=>{
+    const row = document.createElement('div');
+    row.className = 'flex justify-between items-center rounded-lg px-3 py-2 ' + (p.isBot ? '' : 'leader-row you');
+    row.innerHTML = `<span class="font-bold">${i+1}. ${p.isBot?'🤖':'🐑'} ${p.name}</span><span class="font-extrabold text-yellow-300">${p.xp} XP</span>`;
+    el.appendChild(row);
+  });
+}
+function openLeague(){
+  sfxWhoosh();
+  ensureLeaderboard();
+  renderFullLeaderboard();
+  document.getElementById('leagueModal').classList.remove('hidden');
+  document.getElementById('leagueModal').classList.add('flex');
+}
+function closeLeague(){
+  document.getElementById('leagueModal').classList.add('hidden');
+  document.getElementById('leagueModal').classList.remove('flex');
+}
+function renderFullLeaderboard(){
+  const list = getFullLeaderboard();
+  const el = document.getElementById('leagueList');
+  el.innerHTML = '';
+  list.forEach((p,i)=>{
+    const row = document.createElement('div');
+    row.className = 'flex justify-between items-center rounded-xl px-4 py-3 glass ' + (p.isBot ? '' : 'leader-row you');
+    const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1)+'.';
+    row.innerHTML = `<span class="font-bold">${medal} ${p.isBot?'🤖':'🐑'} ${p.name}</span><span class="font-extrabold text-yellow-300">${p.xp} XP</span>`;
+    el.appendChild(row);
+  });
+}
+function simulateBotBoost(){
+  if(!state.leaderboard) return;
+  state.leaderboard.forEach(b=>{ b.xp += Math.floor(Math.random()*20)+5; });
+  saveLocalCache();
+}
+setInterval(()=>{
+  if(!state.leaderboard) return;
+  state.leaderboard.forEach(b=>{ if(Math.random() < 0.6){ b.xp += Math.floor(Math.random()*8)+1; } });
+  saveLocalCache();
+  if(document.getElementById('view-dashboard').classList.contains('active')) renderMiniLeaderboard();
+  if(!document.getElementById('leagueModal').classList.contains('hidden')) renderFullLeaderboard();
+}, 4500);
+
+setInterval(()=>{
+  document.querySelectorAll('.sheep-badge').forEach(s=>{
+    if(s.classList.contains('correct') || s.classList.contains('incorrect')) return;
+    s.classList.add('blink');
+    setTimeout(()=>s.classList.remove('blink'), 250);
+  });
+}, 3800);
+
+/* A little personality: the sheep randomly hops in place every so often, like a real character idling. */
+setInterval(()=>{
+  document.querySelectorAll('.sheep-badge').forEach(s=>{
+    if(s.classList.contains('correct') || s.classList.contains('incorrect')) return;
+    if(Math.random() < 0.55){
+      s.classList.add('hop');
+      setTimeout(()=>s.classList.remove('hop'), 550);
+    }
+  });
+}, 6000);
+
+/* ---------------- PWA: install prompt + service worker ---------------- */
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e)=>{
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  const btn = document.getElementById('installBtn');
+  if(btn) btn.classList.remove('hidden');
+});
+function triggerInstall(){
+  if(!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  deferredInstallPrompt.userChoice.finally(()=>{
+    deferredInstallPrompt = null;
+    document.getElementById('installBtn').classList.add('hidden');
+  });
+}
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('/sw.js').catch(()=>{});
+  });
+}
+
+/* Tapping any sheep badge outside the quiz just makes it hop for joy — pure personality, no audio needed there. */
+document.addEventListener('click', (e)=>{
+  const badge = e.target.closest('.sheep-badge');
+  if(!badge || badge.id === 'quizSheepBadge') return;
+  if(badge.classList.contains('correct') || badge.classList.contains('incorrect')) return;
+  badge.classList.add('hop');
+  setTimeout(()=>badge.classList.remove('hop'), 550);
+});
+
+/* ---------------- INIT ---------------- */
+async function init(){
+  renderLangGrid();
+  const restored = await tryAutoLogin();
+  if(restored){
+    regenHeartsIfDue();
+    afterAuthNavigate();
+  } else {
+    showView('view-auth');
+  }
+}
+init();
+</script>
+</body>
+</html>
