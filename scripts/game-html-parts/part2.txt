@@ -1,0 +1,425 @@
+{}
+}
+
+/* ---------------- AUDIO SYNTH (SFX) ---------------- */
+let audioCtx = null;
+function getCtx(){ if(!audioCtx){ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } return audioCtx; }
+function playTone(freq, duration, type='sine', vol=0.18, delay=0){
+  try{
+    const ctx = getCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type; osc.frequency.value = freq; gain.gain.value = vol;
+    osc.connect(gain); gain.connect(ctx.destination);
+    const startTime = ctx.currentTime + delay;
+    osc.start(startTime);
+    gain.gain.setValueAtTime(vol, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+    osc.stop(startTime + duration + 0.02);
+  }catch(e){}
+}
+function sfxClick(){ playTone(420, 0.08, 'square', 0.08); }
+function sfxCorrect(){ playTone(523.25,0.12,'sine',0.16,0); playTone(659.25,0.12,'sine',0.16,0.09); playTone(783.99,0.18,'sine',0.16,0.18); }
+function sfxIncorrect(){ playTone(220,0.22,'sawtooth',0.15,0); playTone(160,0.28,'sawtooth',0.13,0.08); }
+function sfxComplete(){ playTone(523.25,0.14,'triangle',0.16,0); playTone(659.25,0.14,'triangle',0.16,0.12); playTone(783.99,0.14,'triangle',0.16,0.24); playTone(1046.5,0.22,'triangle',0.18,0.36); }
+function sfxCoin(){ playTone(988,0.08,'square',0.12,0); playTone(1318,0.12,'square',0.12,0.06); }
+function sfxWhoosh(){ playTone(300,0.15,'sine',0.08,0); }
+function sfxAchievement(){ playTone(659.25,0.1,'triangle',0.16,0); playTone(880,0.1,'triangle',0.16,0.1); playTone(1108.7,0.22,'triangle',0.18,0.2); }
+function sfxStageUp(){ playTone(440,0.1,'triangle',0.16,0); playTone(554.37,0.1,'triangle',0.16,0.1); playTone(659.25,0.1,'triangle',0.16,0.2); playTone(880,0.25,'triangle',0.18,0.3); }
+
+/* ---------------- REAL PRE-RECORDED PRONUNCIATION AUDIO (alphabet stage) ---------------- */
+/* Professionally recorded (ElevenLabs) pronunciation clips for the alphabet/sounds stage,
+   in the exact order each language's CONTENT.alphabet array is defined below. */
+
+/* ---------------- REAL PRE-RECORDED PRONUNCIATION AUDIO (fetched at runtime) ---------------- */
+/* Professionally recorded ElevenLabs/Gemini voice clips for alphabet, words, phrases, and sentences,
+   across all 12 languages. Stored server-side and loaded once on page load to keep this file small. */
+let ALPHABET_AUDIO = {};
+let WORDS_AUDIO = {};
+let PHRASES_AUDIO = {};
+let SENTENCES_AUDIO = {};
+let TRANSLATION_AUDIO = {};
+let audioManifestLoaded = false;
+let audioManifestPromise = null;
+function loadAudioManifest(){
+  if(audioManifestPromise) return audioManifestPromise;
+  audioManifestPromise = fetch(api('/api/audio-manifest'), { credentials:'include' })
+    .then(res => res.ok ? res.json() : null)
+    .then(data => {
+      if(data){
+        ALPHABET_AUDIO = data.alphabet || {};
+        WORDS_AUDIO = data.words || {};
+        PHRASES_AUDIO = data.phrases || {};
+        SENTENCES_AUDIO = data.sentences || {};
+        TRANSLATION_AUDIO = data.translation || {};
+        audioManifestLoaded = true;
+      }
+    })
+    .catch(()=>{});
+  return audioManifestPromise;
+}
+loadAudioManifest();
+
+/* ---------------- TEXT-TO-SPEECH ---------------- */
+const TTS_LANG = {
+  spanish:'es-ES', french:'fr-FR', italian:'it-IT', japanese:'ja-JP', mandarin:'zh-CN',
+  korean:'ko-KR', thai:'th-TH', hindi:'hi-IN', urdu:'ur-PK', arabic:'ar-SA', hebrew:'he-IL', greek:'el-GR'
+};
+
+let cachedVoices = [];
+function loadVoices(){
+  try{ cachedVoices = window.speechSynthesis.getVoices() || []; }catch(e){}
+}
+if('speechSynthesis' in window){
+  loadVoices();
+  window.speechSynthesis.onvoiceschanged = loadVoices;
+}
+function pickBestVoice(langCode){
+  if(!cachedVoices.length) loadVoices();
+  const primary = (langCode || 'en').split('-')[0].toLowerCase();
+  const candidates = cachedVoices.filter(v => v.lang && v.lang.toLowerCase().startsWith(primary));
+  if(!candidates.length) return null;
+  const qualityHints = ['google','natural','neural','enhanced','premium','wavenet'];
+  const premium = candidates.find(v => qualityHints.some(h => v.name.toLowerCase().includes(h)));
+  const exact = candidates.find(v => v.lang.toLowerCase() === (langCode||'').toLowerCase());
+  return premium || exact || candidates[0];
+}
+
+let currentAudioEl = null;
+function stopAllAudio(){
+  if(currentAudioEl){ try{ currentAudioEl.pause(); }catch(e){} currentAudioEl = null; }
+  try{ if('speechSynthesis' in window) window.speechSynthesis.cancel(); }catch(e){}
+}
+
+function setSheepSpeaking(isSpeaking){
+  document.querySelectorAll('.sheep-badge').forEach(el=>{
+    el.classList.toggle('speaking-pulse', isSpeaking);
+  });
+  const btns = [document.getElementById('speakBtn'), document.getElementById('questionSpeakBtn')];
+  btns.forEach(btn=>{ if(btn) btn.classList.toggle('speaking', isSpeaking); });
+}
+
+/** Plays a real recorded clip if one exists for this language+index (alphabet stage),
+ *  otherwise falls back to the browser's speech synthesis with the best available voice. */
+function playRecordedClip(clipUrl){
+  const audio = new Audio(clipUrl);
+  currentAudioEl = audio;
+  setSheepSpeaking(true);
+  audio.onended = ()=>{ setSheepSpeaking(false); if(currentAudioEl === audio) currentAudioEl = null; };
+  audio.onerror = ()=>{
+    setSheepSpeaking(false);
+    if(currentAudioEl === audio) currentAudioEl = null;
+    toast('Could not play that clip — check your connection.');
+  };
+  audio.play().catch(()=>{ setSheepSpeaking(false); toast('Tap again to hear the sound.'); });
+}
+
+/** Plays a real recorded, professionally-voiced clip whenever one exists for this language/stage/text.
+ *  Every alphabet, word, phrase, and sentence in every language has a pre-recorded clip, so this should
+ *  always find a match — the browser speechSynthesis fallback only fires if a clip URL is unreachable. */
+function playPronunciation(text, langKey, alphabetIndex){
+  stopAllAudio();
+  if(!audioManifestLoaded){
+    loadAudioManifest().then(()=>playPronunciationResolved(text, langKey, alphabetIndex));
+    return;
+  }
+  playPronunciationResolved(text, langKey, alphabetIndex);
+}
+function playPronunciationResolved(text, langKey, alphabetIndex){
+  let clipUrl = null;
+  if (typeof alphabetIndex === 'number' && ALPHABET_AUDIO[langKey]) {
+    clipUrl = ALPHABET_AUDIO[langKey][alphabetIndex];
+  }
+  if (!clipUrl && TRANSLATION_AUDIO[langKey] && TRANSLATION_AUDIO[langKey][text]) {
+    clipUrl = TRANSLATION_AUDIO[langKey][text];
+  }
+  if (clipUrl) {
+    playRecordedClip(clipUrl);
+    return;
+  }
+  speak(text, TTS_LANG[langKey]);
+}
+
+function speak(text, langCode){
+  try{
+    if(!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const cleaned = text.replace(/\([^)]*\)/g, '').trim();
+    const utter = new SpeechSynthesisUtterance(cleaned || text);
+    utter.lang = langCode || 'en-US';
+    utter.rate = 0.72;
+    utter.pitch = 1.0;
+    const bestVoice = pickBestVoice(langCode);
+    if(bestVoice) utter.voice = bestVoice;
+    setSheepSpeaking(true);
+    utter.onend = ()=>setSheepSpeaking(false);
+    utter.onerror = ()=>setSheepSpeaking(false);
+    window.speechSynthesis.speak(utter);
+  }catch(e){}
+}
+
+/* ---------------- VIEW ROUTER ---------------- */
+function showView(id){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+/* ---------------- TOAST ---------------- */
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=>t.classList.remove('show'), 2800);
+}
+
+/* ---------------- SETTINGS (advanced: separate backend host) ---------------- */
+function openSettings(){
+  document.getElementById('apiBaseInput').value = apiBase;
+  document.getElementById('settingsModal').classList.remove('hidden');
+  document.getElementById('settingsModal').classList.add('flex');
+}
+function closeSettings(){
+  document.getElementById('settingsModal').classList.add('hidden');
+  document.getElementById('settingsModal').classList.remove('flex');
+}
+function saveApiBase(){
+  apiBase = document.getElementById('apiBaseInput').value.trim().replace(/\/$/,'');
+  localStorage.setItem('dreamspeak_api_base', apiBase);
+  toast(apiBase ? '🔗 Using custom server.' : 'Using this server.');
+  closeSettings();
+}
+function api(path){ return (apiBase || '') + path; }
+
+/* ---------------- AUTH ---------------- */
+function switchAuthTab(tab){
+  sfxClick();
+  const isLogin = tab === 'login';
+  document.getElementById('tabLogin').classList.toggle('active', isLogin);
+  document.getElementById('tabSignup').classList.toggle('active', !isLogin);
+  document.getElementById('loginForm').classList.toggle('hidden', !isLogin);
+  document.getElementById('signupForm').classList.toggle('hidden', isLogin);
+}
+
+function applyServerUser(u){
+  state.userId = u.id;
+  state.profile = { name: u.name, email: u.email, phone: u.phone };
+  state.plan = u.plan;
+  state.hearts = u.hearts;
+  state.heartsMax = u.heartsMax;
+  state.lastHeartLostAt = u.lastHeartLostAt;
+  state.xp = u.xp;
+  state.gems = u.gems;
+  state.streak = u.streak;
+  state.lastPlayDate = u.lastPlayDate;
+  state.language = u.language;
+  state.level = u.level;
+  state.stage = u.stage || 'alphabet';
+  state.stageProgress = u.stageProgress || 0;
+  state.lessonsCompleted = u.lessonsCompleted;
+  state.perfectLessons = u.perfectLessons || 0;
+  state.inventory = u.inventory || { freeze:0, hearts:0, boost:0 };
+  state.unlockedAchievements = u.achievements || [];
+  state.loggedIn = true;
+  state.isAdmin = !!u.isAdmin;
+  saveLocalCache();
+}
+
+async function tryAutoLogin(){
+  try{
+    const res = await fetch(api('/api/auth/me'), { credentials:'include' });
+    if(!res.ok) return false;
+    const data = await res.json();
+    if(!data || !data.id) return false;
+    applyServerUser(data);
+    return true;
+  }catch(e){ return false; }
+}
+
+async function doLogin(){
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const errEl = document.getElementById('loginError');
+  errEl.classList.add('hidden');
+  if(!email || !password){
+    errEl.textContent = 'Please enter your email and password.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true;
+  try{
+    const res = await fetch(api('/api/auth/login'), {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+    if(!res.ok){
+      errEl.textContent = data.error || 'Login failed.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    sfxComplete();
+    applyServerUser(data);
+    afterAuthNavigate();
+  }catch(e){
+    errEl.textContent = 'Could not reach the server. Check your connection and try again.';
+    errEl.classList.remove('hidden');
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+async function doSignup(){
+  const name = document.getElementById('signupName').value.trim();
+  const email = document.getElementById('signupEmail').value.trim();
+  const phone = document.getElementById('signupPhone').value.trim();
+  const password = document.getElementById('signupPassword').value;
+  const errEl = document.getElementById('signupError');
+  errEl.classList.add('hidden');
+  if(!name || !email || !phone || !password){
+    errEl.textContent = 'Please fill in every field to continue.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  if(password.length < 6){
+    errEl.textContent = 'Password must be at least 6 characters.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  const btn = document.getElementById('signupBtn');
+  btn.disabled = true;
+  try{
+    const res = await fetch(api('/api/auth/signup'), {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ name, email, phone, password })
+    });
+    const data = await res.json();
+    if(!res.ok){
+      errEl.textContent = data.error || 'Could not create your account.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    sfxComplete();
+    applyServerUser(data);
+    afterAuthNavigate();
+  }catch(e){
+    errEl.textContent = 'Could not reach the server. Check your connection and try again.';
+    errEl.classList.remove('hidden');
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+async function doLogout(){
+  if(!confirm('Log out of Dreamspeak?')) return;
+  try{ await fetch(api('/api/auth/logout'), { method:'POST', credentials:'include' }); }catch(e){}
+  state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+  localStorage.removeItem('dreamspeak_cache_v4');
+  document.getElementById('loginEmail').value = '';
+  document.getElementById('loginPassword').value = '';
+  switchAuthTab('login');
+  showView('view-auth');
+}
+
+function afterAuthNavigate(){
+  if(state.isAdmin){
+    window.location.href = '/admin';
+    return;
+  }
+  refreshHubStats();
+  ensureLeaderboard();
+  if(state.language && state.level){
+    goToDashboard();
+  } else {
+    showView('view-hub');
+  }
+}
+
+async function pushToBackend(){
+  if(!state.userId) return;
+  try{
+    await fetch(api('/api/users/' + state.userId), {
+      method: 'PATCH', credentials:'include',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        xp: state.xp, gems: state.gems, streak: state.streak, lastPlayDate: state.lastPlayDate,
+        lessonsCompleted: state.lessonsCompleted, perfectLessons: state.perfectLessons,
+        achievements: state.unlockedAchievements, language: state.language, level: state.level,
+        stage: state.stage, stageProgress: state.stageProgress, inventory: state.inventory,
+        hearts: state.hearts, lastHeartLostAt: state.lastHeartLostAt
+      })
+    });
+  }catch(e){}
+}
+
+/* Periodically re-check with the server in case an admin changed hearts/plan. */
+async function pullFromBackend(){
+  if(!state.userId) return;
+  try{
+    const res = await fetch(api('/api/users/' + state.userId), { credentials:'include' });
+    if(!res.ok) return;
+    const data = await res.json();
+    if(!data || !data.id) return;
+    let changed = false;
+    if(data.plan && data.plan !== state.plan){ state.plan = data.plan; changed = true; }
+    if(typeof data.hearts === 'number' && data.hearts !== state.hearts){ state.hearts = data.hearts; changed = true; }
+    if(typeof data.heartsMax === 'number' && data.heartsMax !== state.heartsMax){ state.heartsMax = data.heartsMax; changed = true; }
+    if(changed){
+      saveLocalCache();
+      toast('🔄 Synced with your account');
+      refreshHubStats();
+      updateDashboard();
+    }
+  }catch(e){}
+}
+setInterval(()=>{ if(state.userId) pullFromBackend(); }, 20000);
+
+/* ---------------- LANGUAGES (12) ---------------- */
+const LANGUAGES = {
+  spanish:   { name:'Spanish',   native:'Español',   flag:'🇪🇸' },
+  french:    { name:'French',    native:'Français',  flag:'🇫🇷' },
+  italian:   { name:'Italian',   native:'Italiano',  flag:'🇮🇹' },
+  japanese:  { name:'Japanese',  native:'日本語',      flag:'🇯🇵' },
+  mandarin:  { name:'Mandarin',  native:'中文',        flag:'🇨🇳' },
+  korean:    { name:'Korean',    native:'한국어',      flag:'🇰🇷' },
+  thai:      { name:'Thai',      native:'ภาษาไทย',    flag:'🇹🇭' },
+  hindi:     { name:'Hindi',     native:'हिन्दी',      flag:'🇮🇳' },
+  urdu:      { name:'Urdu',      native:'اردو',        flag:'🇵🇰', rtl:true },
+  arabic:    { name:'Arabic',    native:'العربية',     flag:'🇸🇦', rtl:true },
+  hebrew:    { name:'Hebrew',    native:'עברית',       flag:'🇮🇱', rtl:true },
+  greek:     { name:'Greek',     native:'Ελληνικά',    flag:'🇬🇷' }
+};
+
+const STAGE_ORDER = ['alphabet','words','phrases','sentences'];
+const STAGE_META = {
+  alphabet:  { icon:'🔤', label:'Alphabet & Sounds', blurb:"First we learn the letters and sounds — every word is built from these." },
+  words:     { icon:'📝', label:'Single Words',       blurb:"Now let's attach real meaning to sounds with everyday vocabulary." },
+  phrases:   { icon:'💬', label:'Short Phrases',      blurb:"Time to string words together into things you'd actually say." },
+  sentences: { icon:'📖', label:'Complex Sentences',  blurb:"Fluency-level sentences and professional vocabulary — you've come far!" }
+};
+
+const WORD_IMAGES = {
+  dog:   'https://galaxy-prod.tlcdn.com/gen/user_35J6p9VaA7ta4tCbPmZA8UqaTjm/5f766618-0075-45b3-9981-e00470ede69d.png',
+  cat:   'https://galaxy-prod.tlcdn.com/gen/user_35J6p9VaA7ta4tCbPmZA8UqaTjm/2883e7c8-1902-4a31-8bb1-982cdd359d5c.png',
+  water: 'https://galaxy-prod.tlcdn.com/gen/user_35J6p9VaA7ta4tCbPmZA8UqaTjm/154e0e56-08e2-4ab5-b892-0e22352ab547.png',
+  bread: 'https://galaxy-prod.tlcdn.com/gen/user_35J6p9VaA7ta4tCbPmZA8UqaTjm/9bc0a684-26da-4094-af3f-72ec4feb49a2.png',
+  house: 'https://galaxy-prod.tlcdn.com/gen/user_35J6p9VaA7ta4tCbPmZA8UqaTjm/c31481a8-535a-4e1d-aba2-d8b73a30a440.png',
+  book:  'https://galaxy-prod.tlcdn.com/gen/user_35J6p9VaA7ta4tCbPmZA8UqaTjm/9dc95668-0373-406b-bd82-fdf06eb397a4.png',
+  sun:   'https://galaxy-prod.tlcdn.com/gen/user_35J6p9VaA7ta4tCbPmZA8UqaTjm/4f6157a3-c474-4f7e-8ca0-09bc67e24c57.png',
+  moon:  'https://galaxy-prod.tlcdn.com/gen/user_35J6p9VaA7ta4tCbPmZA8UqaTjm/6fc0ecff-225c-4e37-8917-1be15c8a0e8d.png',
+  friend:'https://galaxy-prod.tlcdn.com/gen/user_35J6p9VaA7ta4tCbPmZA8UqaTjm/e460e68a-cc6a-4a9b-826c-22c333b2cb27.png',
+  food:  'https://galaxy-prod.tlcdn.com/gen/user_35J6p9VaA7ta4tCbPmZA8UqaTjm/fe313e0c-1515-4827-9a2e-ec98421027ea.png',
+  red:   'https://galaxy-prod.tlcdn.com/gen/user_35J6p9VaA7ta4tCbPmZA8UqaTjm/605ffe85-d0ff-4fa7-b301-fa25e97dc413.png',
+  big:   'https://galaxy-prod.tlcdn.com/gen/user_35J6p9VaA7ta4tCbPmZA8UqaTjm/f06ea208-3482-4095-969f-f94063500176.png',
+  small: 'https://galaxy-prod.tlcdn.com/gen/user_35J6p9VaA7ta4tCbPmZA8UqaTjm/f06ea208-3482-4095-969f-f94063500176.png',
+  happy: 'https://galaxy-prod.tlcdn.com/gen/user_35J6p9VaA7ta4tCbPmZA8UqaTjm/d1193149-5597-4189-8386-3a2b50b46b3c.png',
+  school:'https://galaxy-prod.tlcdn.com/gen/user_35J6p9VaA7ta4tCbPmZA8UqaTjm/7792de7c-ebd5-4843-85c5-03741263a870.png'
+};
+
+const CONTENT = {
+  spanish:{
+    alphabet:[["A"
