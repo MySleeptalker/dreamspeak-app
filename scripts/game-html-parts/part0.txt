@@ -1,1 +1,428 @@
-TESTCONTENT
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Dreamspeak — Learn a Language with a Sheep</title>
+<meta name="theme-color" content="#8b2ff0">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Dreamspeak">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;500;600;700;800&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --indigo:#4b1e9e;
+    --purple:#8b2ff0;
+    --pink:#ff3fa4;
+    --lime:#7bf542;
+    --gold:#ffcd3c;
+    --sky:#37d0ff;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    font-family:'Nunito',sans-serif;
+    background:
+      radial-gradient(circle at 15% 20%, rgba(255,63,164,0.35), transparent 45%),
+      radial-gradient(circle at 85% 15%, rgba(55,208,255,0.30), transparent 40%),
+      radial-gradient(circle at 50% 90%, rgba(123,245,66,0.18), transparent 45%),
+      linear-gradient(135deg, var(--indigo), var(--purple) 55%, #2c0f63 100%);
+    min-height:100vh;
+    color:#fff;
+    overflow-x:hidden;
+  }
+  .font-display{font-family:'Baloo 2', cursive;}
+  ::-webkit-scrollbar{width:10px;}
+  ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.3);border-radius:10px;}
+
+  .btn-push{
+    transition: transform .08s ease, box-shadow .08s ease, filter .15s ease;
+    box-shadow: 0 6px 0 rgba(0,0,0,0.25);
+    will-change: transform;
+  }
+  .btn-push:active{ transform: translateY(6px); box-shadow: 0 0 0 rgba(0,0,0,0.25); }
+  .btn-push:hover{filter:brightness(1.08);}
+  .btn-push:disabled{opacity:.5; cursor:not-allowed; filter:none;}
+
+  .card-3d{ box-shadow: 0 10px 0 rgba(0,0,0,0.18), 0 20px 40px rgba(0,0,0,0.35); }
+
+  .sheep-badge{
+    display:inline-block;
+    border-radius: 30px;
+    box-shadow: 0 14px 24px rgba(0,0,0,0.45), 0 0 0 4px rgba(255,255,255,0.18);
+    overflow:hidden;
+    animation: sheepFloat 2.6s ease-in-out infinite, sheepSway 5.2s ease-in-out infinite;
+    transform-origin: bottom center;
+    background: #2c0f63;
+    cursor: pointer;
+  }
+  .sheep-badge img{ display:block; width:100%; height:100%; object-fit:cover; }
+  @keyframes sheepFloat{
+    0%,100%{ transform: translateY(0) scale(1,1); }
+    45%{ transform: translateY(-16px) scale(1.03,0.97); }
+    55%{ transform: translateY(-16px) scale(1.03,0.97); }
+  }
+  @keyframes sheepSway{
+    0%,100%{ rotate: -3deg; }
+    50%{ rotate: 3deg; }
+  }
+  .sheep-badge.blink{ filter: brightness(0.55); }
+  .sheep-badge.hop{ animation: sheepHop .5s cubic-bezier(.34,1.56,.64,1) !important; }
+  @keyframes sheepHop{
+    0%{ transform: translateY(0) scale(1,1); }
+    35%{ transform: translateY(-26px) scale(0.92,1.1); }
+    60%{ transform: translateY(0) scale(1.12,0.88); }
+    100%{ transform: translateY(0) scale(1,1); }
+  }
+  .sheep-badge.correct{ animation: sheepLeap .85s cubic-bezier(.34,1.56,.64,1) !important; }
+  @keyframes sheepLeap{
+    0%{ transform: translateY(0) scale(1,1) rotate(0deg); }
+    20%{ transform: translateY(10px) scale(1.15,0.82) rotate(-3deg); }
+    45%{ transform: translateY(-85px) scale(0.88,1.18) rotate(-14deg); }
+    65%{ transform: translateY(-95px) scale(0.92,1.12) rotate(14deg); }
+    82%{ transform: translateY(-10px) scale(1.1,0.9) rotate(-6deg); }
+    100%{ transform: translateY(0) scale(1,1) rotate(0deg); }
+  }
+  .sheep-badge.incorrect{ animation: sheepWince .7s cubic-bezier(.36,.07,.19,.97) !important; }
+  @keyframes sheepWince{
+    0%{ transform: translateX(0) translateY(0) rotate(0) scale(1,1); }
+    12%{ transform: translateX(-18px) translateY(-6px) rotate(-10deg) scale(0.9,1.08); }
+    28%{ transform: translateX(16px) translateY(-2px) rotate(9deg) scale(1.05,0.95); }
+    44%{ transform: translateX(-12px) rotate(-6deg) scale(0.95,1.03); }
+    60%{ transform: translateX(9px) rotate(4deg); }
+    75%{ transform: translateX(-5px) rotate(-2deg); }
+    100%{ transform: translateX(0) rotate(0) scale(1,1); }
+  }
+  .sheep-badge.speaking-pulse{ animation: sheepTalk 0.4s ease-in-out infinite !important; }
+  @keyframes sheepTalk{
+    0%,100%{ transform: scale(1,1) rotate(-1deg); }
+    50%{ transform: scale(1.04,0.97) rotate(1deg); }
+  }
+  .sheep-reaction{
+    position:absolute; top:-14px; right:-14px;
+    font-size:2.2rem; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
+    opacity:0; transform: scale(0.3) rotate(-20deg);
+    transition: opacity .15s ease, transform .15s cubic-bezier(.34,1.56,.64,1);
+    pointer-events:none; z-index: 5;
+  }
+  .sheep-reaction.show{ opacity:1; transform: scale(1) rotate(0deg); }
+  .sheep-emote{
+    position:absolute; bottom:-6px; right:-10px;
+    font-size:1.6rem; filter: drop-shadow(0 4px 4px rgba(0,0,0,0.4));
+    opacity:0; transition: opacity .2s ease, transform .3s ease;
+    transform: scale(0.5);
+  }
+  .sheep-emote.show{ opacity:1; transform: scale(1); }
+
+  .burst-emoji{
+    position:absolute; opacity:0; font-size:1.8rem;
+    animation: burstOut 0.9s ease-out forwards;
+  }
+  @keyframes burstOut{
+    0%{ opacity:1; transform: translate(0,0) scale(0.5); }
+    100%{ opacity:0; transform: translate(var(--bx), var(--by)) scale(1.3) rotate(30deg); }
+  }
+
+  .shake{ animation: shakeCard 0.5s cubic-bezier(.36,.07,.19,.97); }
+  @keyframes shakeCard{
+    10%,90%{ transform: translateX(-1px); }
+    20%,80%{ transform: translateX(6px); }
+    30%,50%,70%{ transform: translateX(-12px); }
+    40%,60%{ transform: translateX(12px); }
+  }
+
+  .progress-track{
+    background: rgba(255,255,255,0.15);
+    border-radius: 999px; overflow:hidden; height: 18px;
+    border: 3px solid rgba(255,255,255,0.25);
+  }
+  .progress-fill{
+    height:100%; background: linear-gradient(90deg,#7bf542,#3ee06f);
+    border-radius:999px; transition: width 0.7s cubic-bezier(.22,1,.36,1);
+    box-shadow: inset 0 -3px 0 rgba(0,0,0,0.15), 0 0 12px rgba(123,245,66,0.6);
+  }
+  .stage-track{
+    background: rgba(255,255,255,0.15);
+    border-radius: 999px; overflow:hidden; height: 14px;
+    border: 2px solid rgba(255,255,255,0.2);
+  }
+  .stage-fill{
+    height:100%; background: linear-gradient(90deg,#37d0ff,#8b2ff0);
+    border-radius:999px; transition: width 0.7s cubic-bezier(.22,1,.36,1);
+  }
+
+  .confetti-piece{
+    position: fixed; top: -20px; width: 10px; height: 14px;
+    opacity: 0.95; pointer-events:none; z-index: 200;
+    animation: confettiFall linear forwards;
+  }
+  @keyframes confettiFall{
+    0%{ transform: translateY(0) rotate(0deg); opacity:1; }
+    100%{ transform: translateY(105vh) rotate(720deg); opacity:0.2; }
+  }
+
+  .view{ display:none !important; }
+  .view.active{ display:block !important; animation: fadeSlideIn .45s ease; }
+  .view.active.view-flex{ display:flex !important; }
+  @keyframes fadeSlideIn{
+    from{ opacity:0; transform: translateY(18px); }
+    to{ opacity:1; transform: translateY(0); }
+  }
+
+  .lang-card{ transition: transform .2s ease, box-shadow .2s ease; }
+  .lang-card:hover{ transform: translateY(-6px) scale(1.03); }
+
+  .option-btn{ transition: transform .1s ease, background .2s ease, border-color .2s ease; }
+  .option-btn:hover:not(:disabled){ transform: translateY(-3px); }
+  .option-btn.correct-flash{ background: linear-gradient(135deg,#3ee06f,#1fb857) !important; border-color:#1fb857 !important; }
+  .option-btn.incorrect-flash{ background: linear-gradient(135deg,#ff5c7a,#e0264a) !important; border-color:#e0264a !important; }
+
+  #shopDrawer{ transform: translateX(100%); transition: transform .35s cubic-bezier(.22,1,.36,1); }
+  #shopDrawer.open{ transform: translateX(0); }
+  #shopOverlay{ opacity:0; pointer-events:none; transition: opacity .35s ease; }
+  #shopOverlay.open{ opacity:1; pointer-events:auto; }
+
+  .glass{ background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); backdrop-filter: blur(10px); }
+  .pill{ background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); }
+
+  .streak-fire{ display:inline-block; animation: fireWiggle 1.4s ease-in-out infinite; }
+  @keyframes fireWiggle{ 0%,100%{ transform: rotate(-4deg) scale(1); } 50%{ transform: rotate(4deg) scale(1.08); } }
+
+  .toast{ position: fixed; top: 20px; right: 20px; z-index: 300; transform: translateX(120%); transition: transform .4s cubic-bezier(.22,1,.36,1); max-width: 320px; }
+  .toast.show{ transform: translateX(0); }
+
+  .radio-card{ transition: all .15s ease; cursor:pointer; }
+  .radio-card.selected{ background: linear-gradient(135deg, rgba(255,205,60,0.25), rgba(255,63,164,0.25)); border-color: #ffcd3c !important; }
+
+  .leader-row.you{ background: linear-gradient(90deg, rgba(255,205,60,0.25), transparent); border-left: 4px solid var(--gold); }
+
+  .badge-tier{ font-family:'Baloo 2', cursive; }
+
+  .achv-card{ transition: transform .15s ease; }
+  .achv-card.locked{ filter: grayscale(0.85) brightness(0.6); opacity:0.65; }
+  .achv-card:not(.locked):hover{ transform: translateY(-4px); }
+
+  input.ds-input{
+    background: rgba(255,255,255,0.1);
+    border: 2px solid rgba(255,255,255,0.25);
+    color: #fff;
+  }
+  input.ds-input::placeholder{ color: rgba(255,255,255,0.55); }
+  input.ds-input:focus{ outline:none; border-color: var(--gold); background: rgba(255,255,255,0.15); }
+
+  .speak-btn{ transition: transform .15s ease, background .2s ease; }
+  .speak-btn:active{ transform: scale(0.9); }
+  .speak-btn.speaking{ animation: speakPulse 0.6s ease-in-out infinite; }
+  @keyframes speakPulse{ 0%,100%{ box-shadow: 0 0 0 0 rgba(255,205,60,0.6);} 50%{ box-shadow: 0 0 0 10px rgba(255,205,60,0);} }
+
+  .word-card-img{
+    width: 120px; height: 120px; border-radius: 24px; object-fit: cover;
+    box-shadow: 0 8px 16px rgba(0,0,0,0.35); border: 3px solid rgba(255,255,255,0.25);
+  }
+
+  .stage-pill{ font-family:'Baloo 2', cursive; font-weight: 700; }
+
+  .auth-tab{
+    padding: 0.6rem 1rem; border-radius: 14px; font-weight: 800; cursor: pointer;
+    transition: background .2s ease, color .2s ease;
+    font-family:'Baloo 2', cursive;
+  }
+  .auth-tab.active{ background: #fff; color: #6d1fb8; }
+  .auth-tab:not(.active){ color: rgba(255,255,255,0.7); }
+</style>
+</head>
+<body>
+
+<!-- ============ SCREEN: AUTH (Login / Sign Up) ============ -->
+<div id="view-auth" class="view view-flex min-h-screen px-4 py-10 items-center justify-center">
+  <div class="max-w-md w-full text-center">
+    <div class="sheep-badge mx-auto mb-4" style="width:130px;height:130px;">
+      <img src="https://galaxy-prod.tlcdn.com/gen/user_35J6p9VaA7ta4tCbPmZA8UqaTjm/0fed94fd-73a9-45b1-a390-caca760f2954.png" alt="Dreamspeak sheep mascot">
+    </div>
+    <h1 class="font-display text-4xl font-extrabold mb-2">Dreamspeak</h1>
+    <p class="text-white/80 font-semibold mb-6" id="authTagline">Log in to pick up right where you left off. 🌿</p>
+
+    <div class="glass card-3d rounded-3xl p-8 border-4 border-white/15 text-left">
+      <div class="flex gap-2 mb-6 justify-center">
+        <div id="tabLogin" class="auth-tab active" onclick="switchAuthTab('login')">Log In</div>
+        <div id="tabSignup" class="auth-tab" onclick="switchAuthTab('signup')">Create Account</div>
+      </div>
+
+      <!-- LOGIN FORM -->
+      <div id="loginForm" class="space-y-4">
+        <div>
+          <label class="text-xs font-bold uppercase tracking-widest text-white/60">Email</label>
+          <input id="loginEmail" type="email" placeholder="you@example.com" class="ds-input w-full rounded-xl px-4 py-3 mt-1 font-semibold" autocomplete="username">
+        </div>
+        <div>
+          <label class="text-xs font-bold uppercase tracking-widest text-white/60">Password</label>
+          <input id="loginPassword" type="password" placeholder="••••••••" class="ds-input w-full rounded-xl px-4 py-3 mt-1 font-semibold" autocomplete="current-password">
+        </div>
+        <p id="loginError" class="text-rose-300 text-sm font-bold hidden"></p>
+        <button onclick="doLogin()" id="loginBtn" class="w-full btn-push font-display text-lg font-bold bg-gradient-to-r from-pink-500 to-purple-600 px-8 py-3 rounded-2xl border-b-4 border-purple-900">
+          Log In →
+        </button>
+        <p class="text-xs text-white/50 text-center">Demo accounts use password: <code class="text-white/70">dreamspeak123</code></p>
+      </div>
+
+      <!-- SIGNUP FORM -->
+      <div id="signupForm" class="space-y-4 hidden">
+        <div>
+          <label class="text-xs font-bold uppercase tracking-widest text-white/60">Full Name</label>
+          <input id="signupName" type="text" placeholder="Jamie Rivera" class="ds-input w-full rounded-xl px-4 py-3 mt-1 font-semibold" autocomplete="name">
+        </div>
+        <div>
+          <label class="text-xs font-bold uppercase tracking-widest text-white/60">Email</label>
+          <input id="signupEmail" type="email" placeholder="you@example.com" class="ds-input w-full rounded-xl px-4 py-3 mt-1 font-semibold" autocomplete="username">
+        </div>
+        <div>
+          <label class="text-xs font-bold uppercase tracking-widest text-white/60">Phone Number</label>
+          <input id="signupPhone" type="tel" placeholder="(555) 123-4567" class="ds-input w-full rounded-xl px-4 py-3 mt-1 font-semibold" autocomplete="tel">
+        </div>
+        <div>
+          <label class="text-xs font-bold uppercase tracking-widest text-white/60">Password</label>
+          <input id="signupPassword" type="password" placeholder="At least 6 characters" class="ds-input w-full rounded-xl px-4 py-3 mt-1 font-semibold" autocomplete="new-password">
+        </div>
+        <p id="signupError" class="text-rose-300 text-sm font-bold hidden"></p>
+        <button onclick="doSignup()" id="signupBtn" class="w-full btn-push font-display text-lg font-bold bg-gradient-to-r from-pink-500 to-purple-600 px-8 py-3 rounded-2xl border-b-4 border-purple-900">
+          Create Account →
+        </button>
+      </div>
+
+      <p class="text-xs text-white/50 text-center mt-4">🔒 Your progress is saved to your account and syncs automatically next time you open the app.</p>
+    </div>
+
+    <button onclick="openSettings()" class="mt-4 text-xs text-white/40 hover:text-white/70 underline">Advanced: connect to a different server</button>
+  </div>
+</div>
+
+<!-- ============ SCREEN: LANGUAGE HUB ============ -->
+<div id="view-hub" class="view min-h-screen px-4 py-10">
+  <div class="max-w-6xl mx-auto text-center">
+    <div class="flex justify-between items-center max-w-6xl mx-auto mb-2">
+      <button onclick="doLogout()" class="text-sm font-bold text-white/60 hover:text-white/90 underline">Log Out</button>
+      <button id="installBtn" onclick="triggerInstall()" class="hidden text-sm font-bold bg-white/10 border border-white/25 rounded-full px-4 py-1.5 hover:bg-white/20">📲 Install App</button>
+      <button onclick="openSettings()" class="text-2xl hover:opacity-70" title="Backend settings">⚙️</button>
+    </div>
+    <div class="sheep-badge mx-auto mb-2" style="width:110px;height:110px;">
+      <img src="https://galaxy-prod.tlcdn.com/gen/user_35J6p9VaA7ta4tCbPmZA8UqaTjm/0fed94fd-73a9-45b1-a390-caca760f2954.png" alt="Dreamspeak sheep mascot">
+    </div>
+    <h1 class="font-display text-5xl md:text-6xl font-extrabold mb-2 tracking-wide drop-shadow-lg">Dreamspeak</h1>
+    <p class="text-lg md:text-xl text-white/85 font-semibold mb-1" id="hubWelcome">Baa-sics to brilliance. Pick a language and let's graze through fluency together. 🌿</p>
+
+    <div id="langGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-10 mt-8"></div>
+
+    <div class="glass rounded-3xl p-6 max-w-3xl mx-auto grid grid-cols-4 gap-4 text-center">
+      <div>
+        <div class="text-3xl font-display font-extrabold text-yellow-300" id="hubXP">0</div>
+        <div class="text-xs uppercase font-bold tracking-widest text-white/70">XP</div>
+      </div>
+      <div>
+        <div class="text-3xl font-display font-extrabold text-emerald-300" id="hubGems">0 💎</div>
+        <div class="text-xs uppercase font-bold tracking-widest text-white/70">Gems</div>
+      </div>
+      <div>
+        <div class="text-3xl font-display font-extrabold text-orange-300"><span class="streak-fire">🔥</span> <span id="hubStreak">0</span></div>
+        <div class="text-xs uppercase font-bold tracking-widest text-white/70">Day Streak</div>
+      </div>
+      <div>
+        <div class="text-3xl font-display font-extrabold text-rose-300" id="hubHearts">5 ❤️</div>
+        <div class="text-xs uppercase font-bold tracking-widest text-white/70" id="hubPlanLabel">Free Plan</div>
+      </div>
+    </div>
+
+    <button onclick="if(state.level){goToDashboard();}else{toast('Complete a placement check first by picking a language above!');}" class="mt-8 btn-push font-display text-lg font-bold bg-white text-purple-700 px-8 py-3 rounded-2xl border-4 border-purple-200">
+      Continue Learning →
+    </button>
+  </div>
+</div>
+
+<!-- ============ SCREEN: PLACEMENT (single question) ============ -->
+<div id="view-placement" class="view view-flex min-h-screen px-4 py-10 items-center justify-center">
+  <div class="max-w-xl w-full">
+    <div class="text-center mb-6">
+      <div class="sheep-badge mx-auto" style="width:110px;height:110px;">
+        <img src="https://galaxy-prod.tlcdn.com/gen/user_35J6p9VaA7ta4tCbPmZA8UqaTjm/0fed94fd-73a9-45b1-a390-caca760f2954.png" alt="Dreamspeak sheep mascot">
+      </div>
+      <h2 class="font-display text-3xl font-extrabold mt-2" id="placementLangTitle">Placement Check</h2>
+    </div>
+
+    <div class="glass card-3d rounded-3xl p-8 border-4 border-white/20" id="placementCard">
+      <p class="font-display text-xl font-bold mb-5">🐑 "Just one quick question — how much time can you commit to Dreamspeak each day?"</p>
+      <div class="space-y-3" id="commitmentOptions"></div>
+
+      <div class="flex justify-end mt-6">
+        <button id="placementNextBtn" onclick="finishPlacement()" disabled class="btn-push font-display font-bold bg-gradient-to-r from-pink-500 to-purple-600 px-8 py-3 rounded-2xl border-b-4 border-purple-800 disabled:opacity-40">
+          See My Level →
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SCREEN: PLACEMENT RESULT ============ -->
+<div id="view-result" class="view view-flex min-h-screen px-4 py-10 items-center justify-center">
+  <div class="max-w-lg w-full text-center glass card-3d rounded-3xl p-10 border-4 border-white/20">
+    <div class="sheep-badge mx-auto mb-4" style="width:130px;height:130px;">
+      <img src="https://galaxy-prod.tlcdn.com/gen/user_35J6p9VaA7ta4tCbPmZA8UqaTjm/0fed94fd-73a9-45b1-a390-caca760f2954.png" alt="Dreamspeak sheep mascot">
+    </div>
+    <h2 class="font-display text-2xl font-bold mb-1">You've been placed into...</h2>
+    <div id="resultTierBadge" class="badge-tier text-4xl font-extrabold my-4"></div>
+    <p class="text-white/80 mb-2" id="resultBlurb"></p>
+    <p class="text-white/60 text-sm mb-6" id="resultStageBlurb"></p>
+    <button onclick="goToDashboard()" class="btn-push font-display text-lg font-bold bg-gradient-to-r from-lime-400 to-emerald-500 text-emerald-950 px-8 py-3 rounded-2xl border-b-4 border-emerald-700">
+      Start Learning 🚀
+    </button>
+  </div>
+</div>
+
+<!-- ============ SCREEN: DASHBOARD ============ -->
+<div id="view-dashboard" class="view min-h-screen px-4 py-6">
+  <div class="max-w-6xl mx-auto">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-8">
+      <div class="flex items-center gap-3">
+        <div class="sheep-badge" style="width:54px;height:54px;border-radius:16px;">
+          <img src="https://galaxy-prod.tlcdn.com/gen/user_35J6p9VaA7ta4tCbPmZA8UqaTjm/0fed94fd-73a9-45b1-a390-caca760f2954.png" alt="sheep">
+        </div>
+        <div>
+          <div class="font-display text-2xl font-extrabold">Dreamspeak</div>
+          <div class="text-xs text-white/70 font-semibold" id="dashTrackLabel">Spanish • Beginner</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-3 flex-wrap">
+        <div class="pill rounded-full px-4 py-2 font-bold flex items-center gap-1"><span class="streak-fire">🔥</span> <span id="dashStreak">0</span></div>
+        <div class="pill rounded-full px-4 py-2 font-bold flex items-center gap-1">⭐ <span id="dashXP">0</span> XP</div>
+        <div class="pill rounded-full px-4 py-2 font-bold flex items-center gap-1">💎 <span id="dashGems">0</span></div>
+        <div class="pill rounded-full px-4 py-2 font-bold flex items-center gap-1">❤️ <span id="dashHearts">5</span></div>
+        <button onclick="openAchievements()" class="btn-push rounded-full px-5 py-2 font-display font-bold bg-gradient-to-r from-fuchsia-500 to-purple-500 border-b-4 border-purple-800">🏅 Milestones</button>
+        <button onclick="openShop()" class="btn-push rounded-full px-5 py-2 font-display font-bold bg-gradient-to-r from-yellow-400 to-orange-400 text-orange-950 border-b-4 border-orange-700">🛍️ Shop</button>
+        <button onclick="openLeague()" class="btn-push rounded-full px-5 py-2 font-display font-bold bg-gradient-to-r from-sky-400 to-blue-500 border-b-4 border-blue-800">🏆 League</button>
+        <button onclick="switchLanguage()" class="btn-push rounded-full px-4 py-2 font-bold bg-white/10 border border-white/30">Switch Lang</button>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="lg:col-span-2">
+        <div class="glass card-3d rounded-3xl p-6 border-4 border-white/15 mb-6">
+          <div class="flex justify-between items-center mb-2">
+            <span class="font-bold text-white/80">Curriculum Stage</span>
+            <span class="stage-pill text-sm" id="stageLabel">🔤 Alphabet & Sounds</span>
+          </div>
+          <div class="stage-track mb-3"><div class="stage-fill" id="stageProgressBar" style="width:0%"></div></div>
+          <div class="flex justify-between items-center mb-2">
+            <span class="font-bold text-white/80 text-sm">Lessons toward next stage</span>
+            <span class="font-bold text-white/80 text-sm" id="lessonCount">0 / 3</span>
+          </div>
+        </div>
+
+        <div class="glass card-3d rounded-3xl p-8 border-4 border-white/15 text-center">
+          <div class="sheep-badge mx-auto mb-2" style="width:90px;height:90px;">
+            <img src="https://galaxy-prod.tlcdn.com/gen/user_35J6p9VaA7ta4tCbPmZA8UqaTjm/0fed94fd-73a9-45b1-a390-caca760f2954.png" alt="sheep">
+          </div>
+          <h3 class="font-display text-2xl font-bold mt-3 mb-2">Ready for today's lesson?</h3>
+        
