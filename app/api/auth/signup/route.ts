@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import { createUser } from "@/lib/store";
+import { createUser, isAdminEmail } from "@/lib/store";
 import { sessionCookieName } from "@/lib/auth";
 import { withCors, corsPreflight } from "@/lib/cors";
 import { CreateUserInput } from "@/types";
+
+const ADMIN_COOKIE_NAME = "ds_admin_session";
 
 export async function OPTIONS() {
   return corsPreflight();
@@ -27,12 +29,21 @@ export async function POST(request: Request) {
     return withCors(NextResponse.json({ error }, { status: 409 }));
   }
 
-  const res = NextResponse.json(user, { status: 201 });
+  const isAdmin = isAdminEmail(user.email);
+  const res = NextResponse.json({ ...user, isAdmin }, { status: 201 });
   res.cookies.set(sessionCookieName(), user.id, {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 180, // 180 days — "log in automatically" going forward
   });
+  if (isAdmin) {
+    res.cookies.set(ADMIN_COOKIE_NAME, "authenticated", {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 180,
+    });
+  }
   return withCors(res);
 }
