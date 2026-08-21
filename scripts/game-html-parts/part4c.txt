@@ -1,0 +1,152 @@
+="font-display text-xl font-bold">${lang.name}</div><div class="text-white/80 text-xs mt-1 font-semibold">${lang.native}</div>`;
+    grid.appendChild(btn);
+  });
+}
+
+const COMMITMENT_OPTIONS = [
+  { label:"5 minutes a day", level:'beginner', stage:'alphabet' },
+  { label:"15 minutes a day", level:'beginner', stage:'alphabet' },
+  { label:"30 minutes a day", level:'intermediate', stage:'phrases' },
+  { label:"1 hour+ a day", level:'advanced', stage:'sentences' }
+];
+let selectedCommitment = null;
+
+function startPlacement(lang){
+  sfxClick();
+  state.language = lang;
+  selectedCommitment = null;
+  document.getElementById('placementLangTitle').textContent = `${LANGUAGES[lang].flag} ${LANGUAGES[lang].name} Placement`;
+  const container = document.getElementById('commitmentOptions');
+  container.innerHTML = '';
+  COMMITMENT_OPTIONS.forEach(opt=>{
+    const div = document.createElement('div');
+    div.className = 'radio-card glass rounded-xl p-4 border-2 border-white/15 font-semibold';
+    div.textContent = opt.label;
+    div.onclick = ()=>{
+      sfxClick();
+      container.querySelectorAll('.radio-card').forEach(c=>c.classList.remove('selected'));
+      div.classList.add('selected');
+      selectedCommitment = opt;
+      document.getElementById('placementNextBtn').disabled = false;
+    };
+    container.appendChild(div);
+  });
+  document.getElementById('placementNextBtn').disabled = true;
+  showView('view-placement');
+}
+
+function finishPlacement(){
+  if(!selectedCommitment) return;
+  sfxClick();
+  state.level = selectedCommitment.level;
+  state.stage = selectedCommitment.stage;
+  state.stageProgress = 0;
+  state.lessonsCompleted = 0;
+  saveLocalCache();
+  pushToBackend();
+
+  const meta = TIER_META[state.level];
+  const stageMeta = STAGE_META[state.stage];
+  document.getElementById('resultTierBadge').innerHTML = `<span class="bg-gradient-to-r ${meta.color} bg-clip-text text-transparent">${meta.icon} ${meta.label}</span>`;
+  document.getElementById('resultBlurb').textContent = meta.blurb;
+  document.getElementById('resultStageBlurb').textContent = `Starting stage: ${stageMeta.icon} ${stageMeta.label} — ${stageMeta.blurb}`;
+  sfxComplete();
+  spawnConfetti(40);
+  checkAchievements();
+  showView('view-result');
+}
+
+function switchLanguage(){ showView('view-hub'); }
+
+function goToDashboard(){
+  regenHeartsIfDue();
+  refreshHubStats();
+  updateDashboard();
+  ensureLeaderboard();
+  renderMiniLeaderboard();
+  showView('view-dashboard');
+}
+
+function updateDashboard(){
+  const meta = TIER_META[state.level] || TIER_META.beginner;
+  const stageMeta = STAGE_META[state.stage] || STAGE_META.alphabet;
+  document.getElementById('dashTrackLabel').textContent = `${LANGUAGES[state.language].flag} ${LANGUAGES[state.language].name} • ${meta.icon} ${meta.label}`;
+  document.getElementById('dashStreak').textContent = state.streak;
+  document.getElementById('dashXP').textContent = state.xp;
+  document.getElementById('dashGems').textContent = state.gems;
+  document.getElementById('dashHearts').textContent = heartsDisplay();
+  document.getElementById('dashBlurb').textContent = stageMeta.blurb;
+  document.getElementById('stageLabel').textContent = `${stageMeta.icon} ${stageMeta.label}`;
+  document.getElementById('lessonCount').textContent = `${state.stageProgress} / ${MASTERY_LESSONS}`;
+  document.getElementById('stageProgressBar').style.width = (state.stageProgress/MASTERY_LESSONS*100)+'%';
+
+  const startBtn = document.getElementById('startLessonBtn');
+  const note = document.getElementById('noHeartsNote');
+  if(state.plan === 'free' && state.hearts <= 0){
+    startBtn.disabled = true;
+    note.classList.remove('hidden');
+    note.textContent = '💔 Out of hearts — check back later or refill with gems.';
+  } else {
+    startBtn.disabled = false;
+    note.classList.add('hidden');
+  }
+}
+
+function refreshHubStats(){
+  document.getElementById('hubXP').textContent = state.xp;
+  document.getElementById('hubGems').textContent = state.gems+' 💎';
+  document.getElementById('hubStreak').textContent = state.streak;
+  document.getElementById('hubHearts').textContent = heartsDisplay() + ' ❤️';
+  document.getElementById('hubPlanLabel').textContent = state.plan === 'paid' ? 'Plus Plan' : 'Free Plan';
+  document.getElementById('hubWelcome').textContent = state.profile.name ? `Welcome back, ${state.profile.name.split(' ')[0]}! Pick a language to continue. 🌿` : "Baa-sics to brilliance. Pick a language and let's graze through fluency together. 🌿";
+}
+
+function registerDailyPlay(){
+  const today = new Date().toDateString();
+  if(state.lastPlayDate === today) return;
+  const yesterday = new Date(Date.now() - 86400000).toDateString();
+  if(state.lastPlayDate === yesterday){
+    state.streak += 1;
+  } else if(state.lastPlayDate === null){
+    state.streak = 1;
+  } else if(state.inventory.freeze > 0){
+    state.inventory.freeze -= 1;
+    state.streak += 1;
+    toast('🧊 Streak Freeze used — your streak survived!');
+  } else {
+    state.streak = 1;
+  }
+  state.lastPlayDate = today;
+  saveLocalCache();
+}
+
+let quiz = { idx:0, correctCount:0, questions:[], answered:false };
+
+function shuffle(arr){
+  const a = arr.slice();
+  for(let i=a.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
+}
+
+function buildQuizQuestions(){
+  const pool = CONTENT[state.language][state.stage];
+  const shuffledPool = shuffle(pool);
+  const count = Math.min(8, shuffledPool.length);
+  const chosen = shuffledPool.slice(0, count);
+  return chosen.map(item=>{
+    const [term, translation] = item;
+    let distractorSource = pool.filter(p=>p[1] !== translation).map(p=>p[1]);
+    if(distractorSource.length < 3){
+      Object.values(CONTENT[state.language]).forEach(stageArr=>{
+        stageArr.forEach(p=>{ if(p[1] !== translation) distractorSource.push(p[1]); });
+      });
+    }
+    const distractors = shuffle(distractorSource).slice(0,3);
+    const options = shuffle([translation, ...distractors]);
+    return { term, translation, options };
+  });
+}
+
+function startQuiz(){
+  regenHeartsIfDue();
+  if(state.plan === '
