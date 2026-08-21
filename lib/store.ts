@@ -1,16 +1,71 @@
-import fs from "fs";
-import path from "path";
+import { neon } from "@neondatabase/serverless";
 import { DreamspeakUser, PublicUser, CreateUserInput, UpdateUserInput, Interaction, CreateInteractionInput, Stage } from "@/types";
 import { hashPassword } from "@/lib/auth";
 import nodeCrypto from "crypto";
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const DATA_FILE = path.join(DATA_DIR, "users.json");
-const INTERACTIONS_FILE = path.join(DATA_DIR, "interactions.json");
 const HEART_REGEN_MS = 24 * 60 * 60 * 1000;
 const HEARTS_MAX_FREE = 5;
 // Hash of the demo password "dreamspeak123" — seed accounts only, for trying out the CRM.
-const DEMO_PASSWORD_HASH = "973fa1cf0b23ec086454868cd6f2b1f4:f3e8700aab128da8b9d8a92f45798274141e1ee1a1439cf8736e1b949eb968f2f8120c096b1a7adf23343803f95be9b46f2e70069a35f793a0a4c7e0685dcb68";
+const DEMO_PASSWORD_HASH =
+  "973fa1cf0b23ec086454868cd6f2b1f4:f3e8700aab128da8b9d8a92f45798274141e1ee1a1439cf8736e1b949eb968f2f8120c096b1a7adf23343803f95be9b46f2e70069a35f793a0a4c7e0685dcb68";
+
+// The main admin's email — logging in with this address routes straight into the CRM dashboard.
+export const ADMIN_EMAIL = "4artistent@gmail.com";
+
+function sql(url: string) {
+  return neon(url);
+}
+function db() {
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error("DATABASE_URL is not configured.");
+  return sql(url);
+}
+
+/* ---------------- row <-> model mapping ---------------- */
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToUser(row: any): DreamspeakUser {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    phone: row.phone || "",
+    passwordHash: row.password_hash,
+    plan: row.plan,
+    hearts: row.hearts,
+    heartsMax: row.hearts_max,
+    lastHeartLostAt: row.last_heart_lost_at !== null ? Number(row.last_heart_lost_at) : null,
+    xp: row.xp,
+    gems: row.gems,
+    streak: row.streak,
+    lastPlayDate: row.last_play_date,
+    language: row.language,
+    level: row.level,
+    stage: row.stage as Stage,
+    stageProgress: row.stage_progress,
+    lessonsCompleted: row.lessons_completed,
+    perfectLessons: row.perfect_lessons,
+    inventory: row.inventory,
+    achievements: row.achievements,
+    createdAt: new Date(row.created_at).toISOString(),
+    updatedAt: new Date(row.updated_at).toISOString(),
+    firstSeenAt: new Date(row.first_seen_at).toISOString(),
+    lastActiveAt: new Date(row.last_active_at).toISOString(),
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToInteraction(row: any): Interaction {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    channel: row.channel,
+    direction: row.direction,
+    subject: row.subject || "",
+    body: row.body || "",
+    createdAt: new Date(row.created_at).toISOString(),
+  };
+}
 
 export function sanitizeUser(user: DreamspeakUser): PublicUser {
   const { passwordHash, ...rest } = user;
@@ -18,99 +73,56 @@ export function sanitizeUser(user: DreamspeakUser): PublicUser {
   return rest;
 }
 
-function seedUsers(): DreamspeakUser[] {
-  const now = new Date().toISOString();
-  const daysAgo = (n: number) => new Date(Date.now() - n * 86400000).toISOString();
-  const seed: Array<Partial<DreamspeakUser>> = [
-    { name: "Maria Gonzalez", email: "maria.g@example.com", phone: "555-201-3344", plan: "paid", hearts: 5, heartsMax: 5, xp: 1240, gems: 620, streak: 18, language: "spanish", level: "advanced", stage: "sentences", stageProgress: 1, lessonsCompleted: 42, achievements: ["first_lesson", "five_lessons", "twenty_lessons", "streak_7", "xp_1000", "alphabet_grad", "words_grad", "phrases_grad", "polyglot"], firstSeenAt: daysAgo(58), lastActiveAt: daysAgo(0) },
-    { name: "Kenji Watanabe", email: "kenji.w@example.com", phone: "555-882-1290", plan: "free", hearts: 2, heartsMax: 5, xp: 340, gems: 180, streak: 4, language: "japanese", level: "intermediate", stage: "phrases", stageProgress: 2, lessonsCompleted: 11, achievements: ["first_lesson", "five_lessons", "streak_3", "xp_100", "alphabet_grad", "words_grad"], firstSeenAt: daysAgo(21), lastActiveAt: daysAgo(1) },
-    { name: "Amelie Laurent", email: "amelie.l@example.com", phone: "555-773-0098", plan: "free", hearts: 5, heartsMax: 5, xp: 60, gems: 300, streak: 1, language: "french", level: "beginner", stage: "alphabet", stageProgress: 1, lessonsCompleted: 2, achievements: ["first_lesson"], firstSeenAt: daysAgo(2), lastActiveAt: daysAgo(0) },
-    { name: "Somchai Boonmee", email: "somchai.b@example.com", phone: "555-441-7723", plan: "free", hearts: 0, heartsMax: 5, lastHeartLostAt: Date.now() - 3 * 60 * 60 * 1000, xp: 210, gems: 90, streak: 2, language: "thai", level: "beginner", stage: "words", stageProgress: 0, lessonsCompleted: 6, achievements: ["first_lesson", "five_lessons", "alphabet_grad"], firstSeenAt: daysAgo(9), lastActiveAt: daysAgo(0) },
-    { name: "James Rivera", email: "james@dreamwealthsolutions.com", phone: "951-555-4009", plan: "paid", hearts: 5, heartsMax: 5, xp: 890, gems: 410, streak: 9, language: "spanish", level: "intermediate", stage: "phrases", stageProgress: 1, lessonsCompleted: 27, achievements: ["first_lesson", "five_lessons", "twenty_lessons", "streak_7", "xp_500", "alphabet_grad", "words_grad"], firstSeenAt: daysAgo(33), lastActiveAt: daysAgo(0) },
+export function isAdminEmail(email: string): boolean {
+  return email.trim().toLowerCase() === ADMIN_EMAIL;
+}
+
+/* ---------------- seeding (idempotent, runs once) ---------------- */
+
+let seedChecked = false;
+
+async function ensureSeeded(): Promise<void> {
+  if (seedChecked) return;
+  const client = db();
+  const existing = await client`SELECT count(*)::int AS count FROM users`;
+  if (existing[0]?.count > 0) {
+    seedChecked = true;
+    return;
+  }
+  const now = new Date();
+  const daysAgo = (n: number) => new Date(Date.now() - n * 86400000);
+  const seed: Array<Partial<DreamspeakUser> & { name: string; email: string; phone: string }> = [
+    { name: "Maria Gonzalez", email: "maria.g@example.com", phone: "555-201-3344", plan: "paid", hearts: 5, heartsMax: 5, xp: 1240, gems: 620, streak: 18, language: "spanish", level: "advanced", stage: "sentences", stageProgress: 1, lessonsCompleted: 42, achievements: ["first_lesson", "five_lessons", "twenty_lessons", "streak_7", "xp_1000", "alphabet_grad", "words_grad", "phrases_grad", "polyglot"] },
+    { name: "Kenji Watanabe", email: "kenji.w@example.com", phone: "555-882-1290", plan: "free", hearts: 2, heartsMax: 5, xp: 340, gems: 180, streak: 4, language: "japanese", level: "intermediate", stage: "phrases", stageProgress: 2, lessonsCompleted: 11, achievements: ["first_lesson", "five_lessons", "streak_3", "xp_100", "alphabet_grad", "words_grad"] },
+    { name: "Amelie Laurent", email: "amelie.l@example.com", phone: "555-773-0098", plan: "free", hearts: 5, heartsMax: 5, xp: 60, gems: 300, streak: 1, language: "french", level: "beginner", stage: "alphabet", stageProgress: 1, lessonsCompleted: 2, achievements: ["first_lesson"] },
+    { name: "Somchai Boonmee", email: "somchai.b@example.com", phone: "555-441-7723", plan: "free", hearts: 0, heartsMax: 5, lastHeartLostAt: Date.now() - 3 * 60 * 60 * 1000, xp: 210, gems: 90, streak: 2, language: "thai", level: "beginner", stage: "words", stageProgress: 0, lessonsCompleted: 6, achievements: ["first_lesson", "five_lessons", "alphabet_grad"] },
+    { name: "James Rivera", email: "james@dreamwealthsolutions.com", phone: "951-555-4009", plan: "paid", hearts: 5, heartsMax: 5, xp: 890, gems: 410, streak: 9, language: "spanish", level: "intermediate", stage: "phrases", stageProgress: 1, lessonsCompleted: 27, achievements: ["first_lesson", "five_lessons", "twenty_lessons", "streak_7", "xp_500", "alphabet_grad", "words_grad"] },
   ];
-  return seed.map((u, i) => ({
-    id: `seed_${i + 1}`,
-    name: u.name || "",
-    email: u.email || "",
-    phone: u.phone || "",
-    passwordHash: DEMO_PASSWORD_HASH,
-    plan: u.plan || "free",
-    hearts: u.hearts ?? HEARTS_MAX_FREE,
-    heartsMax: u.heartsMax ?? HEARTS_MAX_FREE,
-    lastHeartLostAt: u.lastHeartLostAt ?? null,
-    xp: u.xp || 0,
-    gems: u.gems || 0,
-    streak: u.streak || 0,
-    lastPlayDate: null,
-    language: u.language || null,
-    level: (u.level as DreamspeakUser["level"]) || null,
-    stage: (u.stage as Stage) || "alphabet",
-    stageProgress: u.stageProgress || 0,
-    lessonsCompleted: u.lessonsCompleted || 0,
-    perfectLessons: 0,
-    inventory: { freeze: 0, hearts: 0, boost: 0 },
-    achievements: u.achievements || [],
-    createdAt: now,
-    updatedAt: now,
-    firstSeenAt: u.firstSeenAt || now,
-    lastActiveAt: u.lastActiveAt || now,
-  }));
-}
 
-function seedInteractions(users: DreamspeakUser[]): Interaction[] {
-  const byEmail = (email: string) => users.find((u) => u.email === email);
-  const maria = byEmail("maria.g@example.com");
-  const james = byEmail("james@dreamwealthsolutions.com");
-  const now = Date.now();
-  const items: Interaction[] = [];
-  if (maria) {
-    items.push({ id: crypto.randomUUID(), userId: maria.id, channel: "email", direction: "outbound", subject: "Welcome to Dreamspeak Plus!", body: "Thanks for upgrading — let us know if you need anything.", createdAt: new Date(now - 40 * 86400000).toISOString() });
-    items.push({ id: crypto.randomUUID(), userId: maria.id, channel: "note", direction: "outbound", subject: "Support note", body: "Asked about pausing her subscription for a trip; advised streak freeze item instead.", createdAt: new Date(now - 10 * 86400000).toISOString() });
+  for (let i = 0; i < seed.length; i++) {
+    const u = seed[i];
+    const id = `seed_${i + 1}`;
+    const firstSeenAt = u.firstSeenAt ? new Date(u.firstSeenAt) : daysAgo([58, 21, 2, 9, 33][i] ?? 0);
+    const lastActiveAt = now;
+    await client`
+      INSERT INTO users (id, name, email, phone, password_hash, plan, hearts, hearts_max, last_heart_lost_at, xp, gems, streak, last_play_date, language, level, stage, stage_progress, lessons_completed, perfect_lessons, inventory, achievements, created_at, updated_at, first_seen_at, last_active_at)
+      VALUES (${id}, ${u.name}, ${u.email}, ${u.phone}, ${DEMO_PASSWORD_HASH}, ${u.plan || "free"}, ${u.hearts ?? HEARTS_MAX_FREE}, ${u.heartsMax ?? HEARTS_MAX_FREE}, ${u.lastHeartLostAt ?? null}, ${u.xp || 0}, ${u.gems || 0}, ${u.streak || 0}, ${null}, ${u.language || null}, ${u.level || null}, ${u.stage || "alphabet"}, ${u.stageProgress || 0}, ${u.lessonsCompleted || 0}, ${0}, ${JSON.stringify({ freeze: 0, hearts: 0, boost: 0 })}, ${JSON.stringify(u.achievements || [])}, ${now.toISOString()}, ${now.toISOString()}, ${firstSeenAt.toISOString()}, ${lastActiveAt.toISOString()})
+      ON CONFLICT (email) DO NOTHING
+    `;
   }
-  if (james) {
-    items.push({ id: crypto.randomUUID(), userId: james.id, channel: "call", direction: "inbound", subject: "Onboarding call", body: "Walked through the app and answered questions about the Spanish track.", createdAt: new Date(now - 30 * 86400000).toISOString() });
-  }
-  return items;
-}
 
-function ensureFiles(): void {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(DATA_FILE)) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(seedUsers(), null, 2));
+  // Seed a couple of sample interactions for Maria and James.
+  const maria = await client`SELECT id FROM users WHERE email = 'maria.g@example.com'`;
+  const james = await client`SELECT id FROM users WHERE email = 'james@dreamwealthsolutions.com'`;
+  if (maria[0]) {
+    await client`INSERT INTO interactions (id, user_id, channel, direction, subject, body, created_at) VALUES (${nodeCrypto.randomUUID()}, ${maria[0].id}, 'email', 'outbound', 'Welcome to Dreamspeak Plus!', 'Thanks for upgrading — let us know if you need anything.', ${new Date(Date.now() - 40 * 86400000).toISOString()})`;
+    await client`INSERT INTO interactions (id, user_id, channel, direction, subject, body, created_at) VALUES (${nodeCrypto.randomUUID()}, ${maria[0].id}, 'note', 'outbound', 'Support note', 'Asked about pausing her subscription for a trip; advised streak freeze item instead.', ${new Date(Date.now() - 10 * 86400000).toISOString()})`;
   }
-  if (!fs.existsSync(INTERACTIONS_FILE)) {
-    const users = JSON.parse(fs.readFileSync(DATA_FILE, "utf-8")) as DreamspeakUser[];
-    fs.writeFileSync(INTERACTIONS_FILE, JSON.stringify(seedInteractions(users), null, 2));
+  if (james[0]) {
+    await client`INSERT INTO interactions (id, user_id, channel, direction, subject, body, created_at) VALUES (${nodeCrypto.randomUUID()}, ${james[0].id}, 'call', 'inbound', 'Onboarding call', 'Walked through the app and answered questions about the Spanish track.', ${new Date(Date.now() - 30 * 86400000).toISOString()})`;
   }
-}
 
-function readAll(): DreamspeakUser[] {
-  ensureFiles();
-  const raw = fs.readFileSync(DATA_FILE, "utf-8");
-  try {
-    return JSON.parse(raw) as DreamspeakUser[];
-  } catch {
-    return [];
-  }
-}
-
-function writeAll(users: DreamspeakUser[]): void {
-  ensureFiles();
-  fs.writeFileSync(DATA_FILE, JSON.stringify(users, null, 2));
-}
-
-function readInteractions(): Interaction[] {
-  ensureFiles();
-  try {
-    return JSON.parse(fs.readFileSync(INTERACTIONS_FILE, "utf-8")) as Interaction[];
-  } catch {
-    return [];
-  }
-}
-
-function writeInteractions(items: Interaction[]): void {
-  ensureFiles();
-  fs.writeFileSync(INTERACTIONS_FILE, JSON.stringify(items, null, 2));
+  seedChecked = true;
 }
 
 /** Free-plan hearts silently regenerate to max once 24h have passed since the last loss. */
@@ -125,80 +137,76 @@ function applyHeartRegen(user: DreamspeakUser): DreamspeakUser {
   return user;
 }
 
-export function getAllUsersRaw(): DreamspeakUser[] {
-  const users = readAll().map(applyHeartRegen);
-  writeAll(users);
-  return users.sort((a, b) => (b.updatedAt > a.updatedAt ? 1 : -1));
+async function persistHeartRegenIfChanged(original: DreamspeakUser, regenerated: DreamspeakUser): Promise<void> {
+  if (original.hearts === regenerated.hearts && original.lastHeartLostAt === regenerated.lastHeartLostAt) return;
+  const client = db();
+  await client`UPDATE users SET hearts = ${regenerated.hearts}, last_heart_lost_at = ${regenerated.lastHeartLostAt} WHERE id = ${regenerated.id}`;
 }
 
-export function getAllUsers(): PublicUser[] {
-  return getAllUsersRaw().map(sanitizeUser);
-}
-
-export function getUserRawById(id: string): DreamspeakUser | undefined {
-  const users = readAll();
-  const idx = users.findIndex((u) => u.id === id);
-  if (idx === -1) return undefined;
-  const regenerated = applyHeartRegen(users[idx]);
-  users[idx] = regenerated;
-  writeAll(users);
+export async function getAllUsersRaw(): Promise<DreamspeakUser[]> {
+  await ensureSeeded();
+  const client = db();
+  const rows = await client`SELECT * FROM users ORDER BY updated_at DESC`;
+  const users = rows.map(rowToUser);
+  const regenerated = await Promise.all(
+    users.map(async (u) => {
+      const r = applyHeartRegen(u);
+      await persistHeartRegenIfChanged(u, r);
+      return r;
+    })
+  );
   return regenerated;
 }
 
-export function getUserById(id: string): PublicUser | undefined {
-  const user = getUserRawById(id);
+export async function getAllUsers(): Promise<PublicUser[]> {
+  const users = await getAllUsersRaw();
+  return users.map(sanitizeUser);
+}
+
+export async function getUserRawById(id: string): Promise<DreamspeakUser | undefined> {
+  await ensureSeeded();
+  const client = db();
+  const rows = await client`SELECT * FROM users WHERE id = ${id}`;
+  if (!rows[0]) return undefined;
+  const user = rowToUser(rows[0]);
+  const regenerated = applyHeartRegen(user);
+  await persistHeartRegenIfChanged(user, regenerated);
+  return regenerated;
+}
+
+export async function getUserById(id: string): Promise<PublicUser | undefined> {
+  const user = await getUserRawById(id);
   return user ? sanitizeUser(user) : undefined;
 }
 
-export function getUserByEmailRaw(email: string): DreamspeakUser | undefined {
-  return readAll().find((u) => u.email.toLowerCase() === email.toLowerCase());
+export async function getUserByEmailRaw(email: string): Promise<DreamspeakUser | undefined> {
+  await ensureSeeded();
+  const client = db();
+  const rows = await client`SELECT * FROM users WHERE lower(email) = lower(${email})`;
+  return rows[0] ? rowToUser(rows[0]) : undefined;
 }
 
 export async function createUser(input: CreateUserInput): Promise<{ user?: PublicUser; error?: string }> {
-  const existing = getUserByEmailRaw(input.email);
+  await ensureSeeded();
+  const existing = await getUserByEmailRaw(input.email);
   if (existing) {
     return { error: "An account with this email already exists. Try logging in instead." };
   }
   const now = new Date().toISOString();
   const passwordHash = await hashPassword(input.password);
-  const user: DreamspeakUser = {
-    id: crypto.randomUUID(),
-    name: input.name,
-    email: input.email,
-    phone: input.phone,
-    passwordHash,
-    plan: "free",
-    hearts: HEARTS_MAX_FREE,
-    heartsMax: HEARTS_MAX_FREE,
-    lastHeartLostAt: null,
-    xp: 0,
-    gems: 300,
-    streak: 0,
-    lastPlayDate: null,
-    language: null,
-    level: null,
-    stage: "alphabet",
-    stageProgress: 0,
-    lessonsCompleted: 0,
-    perfectLessons: 0,
-    inventory: { freeze: 0, hearts: 0, boost: 0 },
-    achievements: [],
-    createdAt: now,
-    updatedAt: now,
-    firstSeenAt: now,
-    lastActiveAt: now,
-  };
-  const users = readAll();
-  users.push(user);
-  writeAll(users);
-  return { user: sanitizeUser(user) };
+  const id = nodeCrypto.randomUUID();
+  const client = db();
+  await client`
+    INSERT INTO users (id, name, email, phone, password_hash, plan, hearts, hearts_max, last_heart_lost_at, xp, gems, streak, last_play_date, language, level, stage, stage_progress, lessons_completed, perfect_lessons, inventory, achievements, created_at, updated_at, first_seen_at, last_active_at)
+    VALUES (${id}, ${input.name}, ${input.email}, ${input.phone}, ${passwordHash}, 'free', ${HEARTS_MAX_FREE}, ${HEARTS_MAX_FREE}, ${null}, 0, 300, 0, ${null}, ${null}, ${null}, 'alphabet', 0, 0, 0, ${JSON.stringify({ freeze: 0, hearts: 0, boost: 0 })}, ${JSON.stringify([])}, ${now}, ${now}, ${now}, ${now})
+  `;
+  const user = await getUserRawById(id);
+  return { user: user ? sanitizeUser(user) : undefined };
 }
 
-export function updateUser(id: string, input: UpdateUserInput): PublicUser | undefined {
-  const users = readAll();
-  const idx = users.findIndex((u) => u.id === id);
-  if (idx === -1) return undefined;
-  const current = users[idx];
+export async function updateUser(id: string, input: UpdateUserInput): Promise<PublicUser | undefined> {
+  const current = await getUserRawById(id);
+  if (!current) return undefined;
   const next: DreamspeakUser = {
     ...current,
     ...input,
@@ -211,17 +219,25 @@ export function updateUser(id: string, input: UpdateUserInput): PublicUser | und
   if (typeof input.hearts === "number" && input.hearts < next.heartsMax && !next.lastHeartLostAt) {
     next.lastHeartLostAt = Date.now();
   }
-  users[idx] = next;
-  writeAll(users);
+  const client = db();
+  await client`
+    UPDATE users SET
+      name = ${next.name}, email = ${next.email}, phone = ${next.phone}, plan = ${next.plan},
+      hearts = ${next.hearts}, hearts_max = ${next.heartsMax}, last_heart_lost_at = ${next.lastHeartLostAt},
+      xp = ${next.xp}, gems = ${next.gems}, streak = ${next.streak}, last_play_date = ${next.lastPlayDate},
+      language = ${next.language}, level = ${next.level}, stage = ${next.stage}, stage_progress = ${next.stageProgress},
+      lessons_completed = ${next.lessonsCompleted}, perfect_lessons = ${next.perfectLessons},
+      inventory = ${JSON.stringify(next.inventory)}, achievements = ${JSON.stringify(next.achievements)},
+      updated_at = ${next.updatedAt}, last_active_at = ${next.lastActiveAt}
+    WHERE id = ${id}
+  `;
   return sanitizeUser(next);
 }
 
 /** Admin-side edits (hearts override, plan change) should NOT count as "user activity". */
-export function adminUpdateUser(id: string, input: UpdateUserInput): PublicUser | undefined {
-  const users = readAll();
-  const idx = users.findIndex((u) => u.id === id);
-  if (idx === -1) return undefined;
-  const current = users[idx];
+export async function adminUpdateUser(id: string, input: UpdateUserInput): Promise<PublicUser | undefined> {
+  const current = await getUserRawById(id);
+  if (!current) return undefined;
   const next: DreamspeakUser = {
     ...current,
     ...input,
@@ -233,32 +249,36 @@ export function adminUpdateUser(id: string, input: UpdateUserInput): PublicUser 
   if (typeof input.hearts === "number" && input.hearts < next.heartsMax && !next.lastHeartLostAt) {
     next.lastHeartLostAt = Date.now();
   }
-  users[idx] = next;
-  writeAll(users);
+  const client = db();
+  await client`
+    UPDATE users SET
+      name = ${next.name}, email = ${next.email}, phone = ${next.phone}, plan = ${next.plan},
+      hearts = ${next.hearts}, hearts_max = ${next.heartsMax}, last_heart_lost_at = ${next.lastHeartLostAt},
+      xp = ${next.xp}, gems = ${next.gems}, streak = ${next.streak}, last_play_date = ${next.lastPlayDate},
+      language = ${next.language}, level = ${next.level}, stage = ${next.stage}, stage_progress = ${next.stageProgress},
+      lessons_completed = ${next.lessonsCompleted}, perfect_lessons = ${next.perfectLessons},
+      inventory = ${JSON.stringify(next.inventory)}, achievements = ${JSON.stringify(next.achievements)},
+      updated_at = ${next.updatedAt}
+    WHERE id = ${id}
+  `;
   return sanitizeUser(next);
 }
 
 /** Admin: generate and set a fresh temporary password, returned once in plaintext. */
 export async function adminResetPassword(id: string): Promise<string | undefined> {
-  const users = readAll();
-  const idx = users.findIndex((u) => u.id === id);
-  if (idx === -1) return undefined;
+  const current = await getUserRawById(id);
+  if (!current) return undefined;
   const tempPassword = nodeCrypto.randomBytes(6).toString("base64url");
-  users[idx].passwordHash = await hashPassword(tempPassword);
-  users[idx].updatedAt = new Date().toISOString();
-  writeAll(users);
+  const passwordHash = await hashPassword(tempPassword);
+  const client = db();
+  await client`UPDATE users SET password_hash = ${passwordHash}, updated_at = ${new Date().toISOString()} WHERE id = ${id}`;
   return tempPassword;
 }
 
-export function deleteUser(id: string): boolean {
-  const users = readAll();
-  const idx = users.findIndex((u) => u.id === id);
-  if (idx === -1) return false;
-  users.splice(idx, 1);
-  writeAll(users);
-  const interactions = readInteractions().filter((i) => i.userId !== id);
-  writeInteractions(interactions);
-  return true;
+export async function deleteUser(id: string): Promise<boolean> {
+  const client = db();
+  const result = await client`DELETE FROM users WHERE id = ${id} RETURNING id`;
+  return result.length > 0;
 }
 
 export function usersToCsv(users: PublicUser[]): string {
@@ -285,37 +305,28 @@ export function usersToCsv(users: PublicUser[]): string {
 
 /* ---------------- Interactions (messages / emails / calls / notes) ---------------- */
 
-export function getInteractionsForUser(userId: string): Interaction[] {
-  return readInteractions()
-    .filter((i) => i.userId === userId)
-    .sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1));
+export async function getInteractionsForUser(userId: string): Promise<Interaction[]> {
+  const client = db();
+  const rows = await client`SELECT * FROM interactions WHERE user_id = ${userId} ORDER BY created_at DESC`;
+  return rows.map(rowToInteraction);
 }
 
-export function getAllInteractions(): Interaction[] {
-  return readInteractions().sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1));
+export async function getAllInteractions(): Promise<Interaction[]> {
+  const client = db();
+  const rows = await client`SELECT * FROM interactions ORDER BY created_at DESC`;
+  return rows.map(rowToInteraction);
 }
 
-export function createInteraction(input: CreateInteractionInput): Interaction {
-  const item: Interaction = {
-    id: crypto.randomUUID(),
-    userId: input.userId,
-    channel: input.channel,
-    direction: input.direction,
-    subject: input.subject,
-    body: input.body,
-    createdAt: new Date().toISOString(),
-  };
-  const items = readInteractions();
-  items.push(item);
-  writeInteractions(items);
-  return item;
+export async function createInteraction(input: CreateInteractionInput): Promise<Interaction> {
+  const client = db();
+  const id = nodeCrypto.randomUUID();
+  const createdAt = new Date().toISOString();
+  await client`INSERT INTO interactions (id, user_id, channel, direction, subject, body, created_at) VALUES (${id}, ${input.userId}, ${input.channel}, ${input.direction}, ${input.subject}, ${input.body}, ${createdAt})`;
+  return { id, userId: input.userId, channel: input.channel, direction: input.direction, subject: input.subject, body: input.body, createdAt };
 }
 
-export function deleteInteraction(id: string): boolean {
-  const items = readInteractions();
-  const idx = items.findIndex((i) => i.id === id);
-  if (idx === -1) return false;
-  items.splice(idx, 1);
-  writeInteractions(items);
-  return true;
+export async function deleteInteraction(id: string): Promise<boolean> {
+  const client = db();
+  const result = await client`DELETE FROM interactions WHERE id = ${id} RETURNING id`;
+  return result.length > 0;
 }
