@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { getUserById } from "@/lib/store";
+import { getUserById, isAdminEmail } from "@/lib/store";
 import { sessionCookieName } from "@/lib/auth";
 import { withCors, corsPreflight } from "@/lib/cors";
 
@@ -14,9 +14,9 @@ export async function GET() {
   if (!userId) {
     return withCors(NextResponse.json({ error: "Not logged in" }, { status: 401 }));
   }
-  const user = getUserById(userId);
+  const user = await getUserById(userId);
   if (!user) {
     return withCors(NextResponse.json({ error: "Session no longer valid" }, { status: 401 }));
   }
-  return withCors(NextResponse.json(user));
+  return withCors(NextResponse.json({ ...user, isAdmin: isAdminEmail(user.email) }));
 }
