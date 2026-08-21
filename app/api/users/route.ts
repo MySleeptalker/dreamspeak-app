@@ -8,7 +8,7 @@ export async function OPTIONS() {
 }
 
 export async function GET() {
-  return withCors(NextResponse.json(getAllUsers()));
+  return withCors(NextResponse.json(await getAllUsers()));
 }
 
 /** Admin/integration user creation. The game app should use /api/auth/signup instead
