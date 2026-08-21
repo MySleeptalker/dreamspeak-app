@@ -7,7 +7,7 @@ export async function OPTIONS() {
 }
 
 export async function GET() {
-  const csv = usersToCsv(getAllUsers());
+  const csv = usersToCsv(await getAllUsers());
   const res = new NextResponse(csv, {
     status: 200,
     headers: {
