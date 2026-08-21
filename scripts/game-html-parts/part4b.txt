@@ -1,0 +1,96 @@
+
+
+const TIER_META = {
+  beginner:{ icon:'🌱', label:'Beginner', color:'from-green-400 to-emerald-500', blurb:"Fresh grass, fresh start! We'll build you up from the alphabet, one sound at a time." },
+  intermediate:{ icon:'🚀', label:'Intermediate', color:'from-sky-400 to-indigo-500', blurb:"You've got momentum — we'll start you on real conversational phrases." },
+  advanced:{ icon:'🎓', label:'Fluent / Advanced', color:'from-pink-500 to-fuchsia-600', blurb:"Sharpening the technical edge. Fluency-level sentences, incoming." }
+};
+
+const ACHIEVEMENTS = [
+  { id:'first_lesson', icon:'🎯', title:'First Steps', desc:'Complete your first lesson', check: s => s.lessonsCompleted >= 1 },
+  { id:'five_lessons', icon:'📚', title:'Getting Grazy', desc:'Complete 5 lessons', check: s => s.lessonsCompleted >= 5 },
+  { id:'twenty_lessons', icon:'📖', title:'Flock Scholar', desc:'Complete 20 lessons', check: s => s.lessonsCompleted >= 20 },
+  { id:'streak_3', icon:'🔥', title:'Warming Up', desc:'Reach a 3-day streak', check: s => s.streak >= 3 },
+  { id:'streak_7', icon:'🔥🔥', title:'Week Wooly Warrior', desc:'Reach a 7-day streak', check: s => s.streak >= 7 },
+  { id:'streak_30', icon:'🔥🔥🔥', title:'Unstoppable Flock', desc:'Reach a 30-day streak', check: s => s.streak >= 30 },
+  { id:'xp_100', icon:'⭐', title:'Rising Star', desc:'Earn 100 XP', check: s => s.xp >= 100 },
+  { id:'xp_500', icon:'🌟', title:'Bright Baa-liant', desc:'Earn 500 XP', check: s => s.xp >= 500 },
+  { id:'xp_1000', icon:'💫', title:'XP Legend', desc:'Earn 1000 XP', check: s => s.xp >= 1000 },
+  { id:'perfect_lesson', icon:'✅', title:'Flawless Fleece', desc:'Score 100% on a lesson', check: s => s.perfectLessons >= 1 },
+  { id:'gem_collector', icon:'💎', title:'Gem Collector', desc:'Hold 500 gems at once', check: s => s.gems >= 500 },
+  { id:'alphabet_grad', icon:'🔤', title:'Sound It Out', desc:'Graduate from the alphabet stage', check: s => STAGE_ORDER.indexOf(s.stage) >= 1 },
+  { id:'words_grad', icon:'📝', title:'Wordsmith', desc:'Graduate from the words stage', check: s => STAGE_ORDER.indexOf(s.stage) >= 2 },
+  { id:'phrases_grad', icon:'💬', title:'Conversationalist', desc:'Graduate from the phrases stage', check: s => STAGE_ORDER.indexOf(s.stage) >= 3 },
+  { id:'polyglot', icon:'🎓', title:'Fluency Track', desc:'Reach the Fluent/Advanced level', check: s => s.level === 'advanced' }
+];
+
+function checkAchievements(){
+  ACHIEVEMENTS.forEach(a=>{
+    if(!state.unlockedAchievements.includes(a.id) && a.check(state)){
+      state.unlockedAchievements.push(a.id);
+      sfxAchievement();
+      spawnConfetti(30);
+      toast(`🏅 Milestone unlocked: ${a.title}!`);
+    }
+  });
+  saveLocalCache();
+  pushToBackend();
+}
+
+function openAchievements(){
+  sfxWhoosh();
+  const grid = document.getElementById('achvGrid');
+  grid.innerHTML = '';
+  ACHIEVEMENTS.forEach(a=>{
+    const unlocked = state.unlockedAchievements.includes(a.id);
+    const card = document.createElement('div');
+    card.className = 'achv-card glass rounded-2xl p-4 text-center border-2 border-white/10' + (unlocked ? '' : ' locked');
+    card.innerHTML = `<div class="text-4xl mb-2">${a.icon}</div><div class="font-display font-bold text-sm">${a.title}</div><div class="text-xs text-white/60 mt-1">${a.desc}</div>${unlocked ? '<div class="text-[10px] mt-2 text-emerald-300 font-bold">UNLOCKED</div>' : '<div class="text-[10px] mt-2 text-white/40 font-bold">LOCKED</div>'}`;
+    grid.appendChild(card);
+  });
+  document.getElementById('achvModal').classList.remove('hidden');
+  document.getElementById('achvModal').classList.add('flex');
+}
+function closeAchievements(){
+  document.getElementById('achvModal').classList.add('hidden');
+  document.getElementById('achvModal').classList.remove('flex');
+}
+
+function regenHeartsIfDue(){
+  if(state.plan === 'paid') return;
+  if(state.hearts >= state.heartsMax) return;
+  if(!state.lastHeartLostAt) return;
+  const elapsed = Date.now() - state.lastHeartLostAt;
+  if(elapsed >= HEART_REGEN_MS){
+    state.hearts = state.heartsMax;
+    state.lastHeartLostAt = null;
+    saveLocalCache();
+    toast('❤️ Your hearts have refilled!');
+  }
+}
+function loseHeart(){
+  if(state.plan === 'paid') return;
+  state.hearts = Math.max(0, state.hearts - 1);
+  if(!state.lastHeartLostAt){ state.lastHeartLostAt = Date.now(); }
+  saveLocalCache();
+  pushToBackend();
+}
+function heartsDisplay(){
+  return state.plan === 'paid' ? '∞' : state.hearts;
+}
+
+function renderLangGrid(){
+  const grid = document.getElementById('langGrid');
+  grid.innerHTML = '';
+  const gradients = [
+    'from-pink-500 to-orange-400','from-sky-500 to-indigo-500','from-emerald-500 to-teal-600',
+    'from-rose-500 to-fuchsia-600','from-red-500 to-rose-600','from-indigo-500 to-purple-600',
+    'from-teal-500 to-emerald-600','from-orange-500 to-amber-500','from-lime-500 to-green-600',
+    'from-fuchsia-500 to-pink-600','from-blue-500 to-cyan-500','from-purple-500 to-violet-600'
+  ];
+  Object.keys(LANGUAGES).forEach((key, idx)=>{
+    const lang = LANGUAGES[key];
+    const btn = document.createElement('button');
+    btn.onclick = ()=>startPlacement(key);
+    btn.className = `lang-card btn-push card-3d rounded-3xl p-5 bg-gradient-to-br ${gradients[idx % gradients.length]} border-4 border-white/30`;
+    btn.innerHTML = `<div class="text-5xl mb-2">${lang.flag}</div><div class
