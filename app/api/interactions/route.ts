@@ -10,7 +10,7 @@ export async function OPTIONS() {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const userId = searchParams.get("userId");
-  const items = userId ? getInteractionsForUser(userId) : getAllInteractions();
+  const items = userId ? await getInteractionsForUser(userId) : await getAllInteractions();
   return withCors(NextResponse.json(items));
 }
 
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   if (!body.userId || !body.channel || !body.direction || !body.subject) {
     return withCors(NextResponse.json({ error: "userId, channel, direction, and subject are required" }, { status: 400 }));
   }
-  const item = createInteraction({
+  const item = await createInteraction({
     userId: body.userId,
     channel: body.channel,
     direction: body.direction,
